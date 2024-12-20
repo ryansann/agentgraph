@@ -51,16 +51,18 @@ async fn test_basic_counter_flow() {
         Ok(state)
     });
 
-    let graph = Graph::new()
-        .add_node(increment_node)
+    let built_graph = {
+        let mut graph = Graph::new();
+        graph.add_node(increment_node)
         .add_node(double_node)
         .add_edge("increment", "double")
-        .add_edge("_START_", "increment")
-        .build();
+        .add_edge("_START_", "increment");
+        graph.build()
+    };
 
     let ctx = Context::new("test");
     let initial_state = CounterState::new(10);
-    let final_state = graph.run(&ctx, initial_state).await.unwrap();
+    let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
 
     assert_eq!(final_state.count, 30); // (10 + 5) * 2
     assert_eq!(final_state.history, vec!["increment_5", "double"]);
@@ -80,8 +82,9 @@ async fn test_conditional_routing() {
         Ok(state)
     });
 
-    let graph = Graph::new()
-        .add_node(even_node)
+    let built_graph = {
+        let mut graph = Graph::new();
+        graph.add_node(even_node)
         .add_node(odd_node)
         .add_edge("_START_", "even")
         .add_conditional_edge("even", |state: &CounterState| {
@@ -97,12 +100,13 @@ async fn test_conditional_routing() {
             } else {
                 "even".to_string()
             }
-        })
-        .build();
+        });
+        graph.build()
+    };
 
     let ctx = Context::new("test");
     let initial_state = CounterState::new(5);
-    let final_state = graph.run(&ctx, initial_state).await.unwrap();
+    let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
 
     // Verify execution path and final state
     println!("Final count: {}", final_state.count);
@@ -120,16 +124,18 @@ async fn test_message_flow() {
         Ok(state)
     });
 
-    let graph = Graph::new()
-        .add_node(process_node)
-        .add_edge("_START_", "process")
-        .build();
+    let built_graph = {
+        let mut graph = Graph::new();
+        graph.add_node(process_node)
+        .add_edge("_START_", "process");
+        graph.build()
+    };
 
     let ctx = Context::new("test");
     let mut initial_state = MessagesState::new();
     initial_state.add_message(Message::human("Test message"));
 
-    let final_state = graph.run(&ctx, initial_state).await.unwrap();
+    let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
     
     assert_eq!(final_state.messages.len(), 2);
     assert_eq!(
@@ -171,21 +177,23 @@ async fn test_retry_behavior() {
         max_failures: 2,
     };
 
-    let graph = Graph::new()
-        .add_node(flaky_node)
-        .add_edge("_START_", "flaky")
-        .build();
+    let built_graph = {
+        let mut graph = Graph::new();
+        graph.add_node(flaky_node)
+        .add_edge("_START_", "flaky");
+        graph.build()
+    };
 
     let ctx = Context::new("test");
     let initial_state = CounterState::new(0);
-    let result = graph.run(&ctx, initial_state).await;
+    let result = built_graph.run(&ctx, initial_state).await;
 
     assert!(result.is_ok());
     assert_eq!(*attempts.lock().await, 3); // 2 failures + 1 success
 }
 
 // Helper function to create test nodes
-fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState + Send + Sync + 'static) 
+fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState + Send + Sync + Clone + 'static) 
     -> impl Node<CounterState> 
 {
     FunctionNode::new(name, move |_ctx, state| {
@@ -198,8 +206,9 @@ fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState
 
 #[tokio::test]
 async fn test_complex_workflow() {
-    let graph = Graph::new()
-        .add_node(create_test_node("step1", |mut state| {
+    let built_graph = {
+        let mut graph = Graph::new();
+        graph.add_node(create_test_node("step1", |mut state| {
             state.count += 1;
             state.record_operation("step1");
             state
@@ -218,12 +227,13 @@ async fn test_complex_workflow() {
         .add_conditional_edge("step1", move |state: &CounterState| {
             if state.count > 0 { "step2".to_string() } else { "step3".to_string() }
         })
-        .add_edge("step2", "step3")
-        .build();
+        .add_edge("step2", "step3");
+        graph.build()
+    };
 
     let ctx = Context::new("test_complex");
     let initial_state = CounterState::new(5);
-    let final_state = graph.run(&ctx, initial_state).await.unwrap();
+    let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
 
     // Verify execution path and results
     println!("Final state: {:?}", final_state);

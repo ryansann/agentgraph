@@ -4,8 +4,8 @@ mod state;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub use node::{Context, Node};
-pub use state::{Built, NotBuilt, Edge, NodeConfig};
+pub use node::{Context, Node, FunctionNode};
+pub use state::{Built, NotBuilt, Edge, NodeConfig, GraphState};
 use crate::types::{Error, Result};
 
 const START: &str = "_START_";
