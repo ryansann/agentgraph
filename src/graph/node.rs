@@ -36,15 +36,25 @@ pub trait Node<State>: Send + Sync + Debug {
 }
 
 /// A node that processes state using a function
-#[derive(Debug)]
 pub struct FunctionNode<State, F> {
     name: String,
     f: F,
     _phantom: std::marker::PhantomData<State>,
 }
 
+// Instead of #[derive(Debug)]
+impl<State, F> std::fmt::Debug for FunctionNode<State, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionNode")
+            .field("name", &self.name)
+            // Skip the function field since it can't implement Debug
+            .finish()
+    }
+}
+
 impl<State, F, Fut> FunctionNode<State, F>
 where
+    State: Debug + Send,
     F: Fn(&Context, State) -> Fut + Send + Sync,
     Fut: std::future::Future<Output = Result<State>> + Send,
 {
@@ -60,7 +70,7 @@ where
 #[async_trait]
 impl<State, F, Fut> Node<State> for FunctionNode<State, F>
 where
-    State: Send,
+    State: Debug + Send + Sync,
     F: Fn(&Context, State) -> Fut + Send + Sync,
     Fut: std::future::Future<Output = Result<State>> + Send,
 {

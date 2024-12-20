@@ -54,7 +54,7 @@ where
     where
         F: Fn(&State) -> String + Send + Sync + 'static,
     {
-        self.edges.insert(from.into(), Edge::Conditional(Box::new(condition)));
+        self.edges.insert(from.into(), Edge::Conditional(Arc::new(condition)));
         self
     }
 
@@ -163,16 +163,18 @@ mod tests {
         let node2 = FunctionNode::new("node2", |_ctx, state: i32| async move { Ok(state * 2) });
 
         // Build graph
-        let graph = Graph::new()
-            .add_node(node1)
+        let built_graph = {
+            let mut graph = Graph::new();
+            graph.add_node(node1)
             .add_node(node2)
             .add_edge("node1", "node2")
-            .add_edge(START, "node1")
-            .build();
+            .add_edge(START, "node1");
+            graph.build()
+        };
 
         // Run graph
         let ctx = Context::new("test");
-        let result = graph.run(&ctx, 1).await.unwrap();
+        let result = built_graph.run(&ctx, 1).await.unwrap();
 
         // 1 + 1 = 2, 2 * 2 = 4
         assert_eq!(result, 4);
@@ -185,23 +187,25 @@ mod tests {
         let node2 = FunctionNode::new("node2", |_ctx, state: i32| async move { Ok(state * 2) });
 
         // Build graph with condition
-        let graph = Graph::new()
-            .add_node(node1)
+        let built_graph = {
+            let mut graph = Graph::new();
+            graph.add_node(node1)
             .add_node(node2)
             .add_edge(START, "node1")
             .add_conditional_edge("node1", |state: &i32| {
                 if *state < 5 { "node2".into() } else { END.into() }
-            })
-            .build();
+            });
+            graph.build()
+        };
 
         // Test when condition routes to node2
         let ctx = Context::new("test1");
-        let result = graph.run(&ctx, 1).await.unwrap();
+        let result = built_graph.run(&ctx, 1).await.unwrap();
         assert_eq!(result, 4);
 
         // Test when condition routes to END
         let ctx = Context::new("test2");
-        let result = graph.run(&ctx, 5).await.unwrap();
+        let result = built_graph.run(&ctx, 5).await.unwrap();
         assert_eq!(result, 6);
     }
 }

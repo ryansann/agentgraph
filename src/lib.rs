@@ -1,9 +1,9 @@
-//! Graphite is a framework for building stateful, multi-actor applications with LLMs.
+//! AgentGraph is a framework for building stateful, multi-actor applications with LLMs.
 //! 
 //! # Examples
 //! 
 //! ```rust,no_run
-//! use graphite::prelude::*;
+//! use agentgraph::prelude::*;
 //! 
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let agent = BaseAgent::new(/* ... */);
@@ -11,7 +11,6 @@
 //! # }
 //! ```
 
-pub mod agent;
 pub mod graph;
 pub mod types;
 pub mod utils;
