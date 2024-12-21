@@ -17,29 +17,8 @@ use std::sync::Arc;
 use std::pin::Pin;
 use std::time::SystemTime;
 use uuid::Uuid;
-
-#[async_trait]
-pub trait TracingProvider: Send + Sync {
-    async fn record_span(
-        &self,
-        trace_id: Uuid,
-        name: String,
-        start_time: SystemTime,
-        end_time: SystemTime,
-        request: &CreateChatCompletionRequest,
-        output: CreateChatCompletionResponse,
-    );
-    
-    async fn record_stream_span(
-        &self,
-        trace_id: Uuid,
-        name: String,
-        start_time: SystemTime,
-        end_time: SystemTime,
-        request: &CreateChatCompletionRequest,
-        output: String,
-    );
-}
+use serde_json::{json, Value};
+use crate::{TracingProvider, TracingError};
 
 #[derive(Debug, Clone)]
 pub struct ChatCompletionRequestOptions {
@@ -49,11 +28,14 @@ pub struct ChatCompletionRequestOptions {
     pub tool_choice: Option<ChatCompletionToolChoiceOption>,
 }
 
+const DEFAULT_MODEL: &str = "gpt-4o-mini";
+const DEFAULT_TEMPERATURE: f32 = 0.0;
+
 impl Default for ChatCompletionRequestOptions {
     fn default() -> Self {
         Self {
-            model: "gpt-4-turbo-preview".to_string(),
-            temperature: None,
+            model: DEFAULT_MODEL.to_string(),
+            temperature: DEFAULT_TEMPERATURE.into(),
             tools: None,
             tool_choice: None,
         }
@@ -63,6 +45,7 @@ impl Default for ChatCompletionRequestOptions {
 #[derive(Debug, Clone, Default)]
 pub struct ChatCompletionCallOptions {
     pub trace_id: Option<Uuid>,
+    pub parent_trace_id: Option<Uuid>,
 }
 
 #[async_trait]
@@ -177,25 +160,45 @@ impl ChatClient for ChatClientImpl {
         request: CreateChatCompletionRequest,
         options: Option<ChatCompletionCallOptions>,
     ) -> Result<CreateChatCompletionResponse, Box<dyn std::error::Error + Send + Sync>> {
-        let start_time = SystemTime::now();
         let trace_id = options
+            .as_ref()
             .and_then(|o| o.trace_id)
             .unwrap_or_else(Uuid::new_v4);
+        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id);
 
-        let response = self.client.chat().create(request.clone()).await?;
-        let end_time = SystemTime::now();
+        // If we want to capture the entire request:
+        let inputs = serde_json::to_value(&request)
+            .unwrap_or_else(|_| json!({ "error": "Failed to serialize request" }));
 
+        // Start trace
         if let Some(tracer) = &self.tracer {
             tracer
-                .record_span(
+                .start_trace(
                     trace_id,
-                    "chat_completion".into(),
-                    start_time,
-                    end_time,
-                    &request,
-                    response.clone(),
+                    "chat_completion",
+                    "llm",
+                    &inputs,
+                    parent_trace_id,
+                    Some(SystemTime::now()),
                 )
-                .await;
+                .await?;
+        }
+
+        // Call the OpenAI endpoint
+        let response = self.client.chat().create(request.clone()).await?;
+
+        // End trace
+        if let Some(tracer) = &self.tracer {
+            let outputs = serde_json::to_value(&response)
+                .unwrap_or_else(|_| json!({ "error": "Failed to serialize response" }));
+
+            tracer
+                .end_trace(
+                    trace_id,
+                    &outputs,
+                    Some(SystemTime::now()),
+                )
+                .await?;
         }
 
         Ok(response)
@@ -206,47 +209,68 @@ impl ChatClient for ChatClientImpl {
         request: CreateChatCompletionRequest,
         options: Option<ChatCompletionCallOptions>,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
+        Pin<Box<dyn futures::Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
         Box<dyn std::error::Error + Send + Sync>
     > {
-        let start_time = SystemTime::now();
         let trace_id = options
+            .as_ref()
             .and_then(|o| o.trace_id)
             .unwrap_or_else(Uuid::new_v4);
-        let tracer = self.tracer.clone();
-        let request_clone = request.clone();
+        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id);
+
+        // Serialize the entire request for the trace
+        let inputs = serde_json::to_value(&request)
+            .unwrap_or_else(|_| json!({ "error": "Failed to serialize request" }));
+
+        // Start trace
+        if let Some(tracer) = &self.tracer {
+            tracer
+                .start_trace(
+                    trace_id,
+                    "chat_completion_stream",
+                    "chain",
+                    &inputs,
+                    parent_trace_id,
+                    Some(SystemTime::now()),
+                )
+                .await?;
+        }
 
         let mut stream = self.client.chat().create_stream(request).await?;
+        let tracer = self.tracer.clone();
 
         let stream = async_stream::stream! {
             let mut full_response = String::new();
-
             while let Some(result) = stream.next().await {
                 match result {
                     Ok(response) => {
-                        if let Some(delta) = response.choices.first() {
-                            if let Some(content) = &delta.delta.content {
+                        // Collect streamed content
+                        if let Some(choice) = response.choices.first() {
+                            if let Some(content) = &choice.delta.content {
                                 full_response.push_str(content);
                             }
                         }
                         yield Ok(response);
                     }
-                    Err(e) => yield Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
+                    Err(e) => {
+                        yield Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+                    }
                 }
             }
 
+            // End trace after we finish streaming
             if let Some(tracer) = tracer {
-                let end_time = SystemTime::now();
-                tracer
-                    .record_stream_span(
+                let outputs = json!({ "streamed_content": full_response });
+                if let Err(e) = tracer
+                    .end_trace(
                         trace_id,
-                        "chat_completion_stream".into(),
-                        start_time,
-                        end_time,
-                        &request_clone,
-                        full_response,
+                        &outputs,
+                        Some(SystemTime::now()),
                     )
-                    .await;
+                    .await
+                {
+                    eprintln!("Error ending stream trace: {:?}", e);
+                }
             }
         };
 

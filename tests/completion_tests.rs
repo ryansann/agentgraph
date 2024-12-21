@@ -12,35 +12,33 @@ use mockall::mock;
 use mockall::predicate::*;
 use uuid::Uuid;
 use std::io::{stdout, Write};
-
+use async_trait::async_trait;
 use agentgraph::completion::*;
+use serde_json::Value;
 
 const TEST_MODEL: &str = "gpt-4o-mini";
 
 // Mock tracer for testing
 mock! {
     pub TracerTest {}
-    #[async_trait::async_trait]
+    #[async_trait]
     impl TracingProvider for TracerTest {
-        async fn record_span(
+        async fn start_trace(
             &self,
             trace_id: Uuid,
-            name: String,
-            start_time: SystemTime,
-            end_time: SystemTime,
-            request: &CreateChatCompletionRequest,
-            output: CreateChatCompletionResponse,
-        );
-        
-        async fn record_stream_span(
+            name: &str,
+            trace_type: &str,
+            inputs: &Value,
+            parent_trace_id: Option<Uuid>,
+            start_time: Option<SystemTime>,
+        ) -> Result<(), TracingError>;
+
+        async fn end_trace(
             &self,
             trace_id: Uuid,
-            name: String,
-            start_time: SystemTime,
-            end_time: SystemTime,
-            request: &CreateChatCompletionRequest,
-            output: String,
-        );
+            outputs: &Value,
+            end_time: Option<SystemTime>,
+        ) -> Result<(), TracingError>;
     }
 }
 
@@ -85,30 +83,35 @@ async fn test_chat_completion() {
     // Test with tracing
     let mut mock_tracer = MockTracerTest::new();
     mock_tracer
-        .expect_record_span()
+        .expect_start_trace()
         .times(1)
-        .returning(|_, _, _, _, _, _| ());
+        .returning(|_, _, _, _, _, _| Ok(()));
+    mock_tracer
+        .expect_end_trace()
+        .times(1)
+        .returning(|_, _, _| Ok(()));
     
-        let client_with_tracing = client.with_tracer(Arc::new(mock_tracer));
+    let client_with_tracing = client.with_tracer(Arc::new(mock_tracer));
+
+    let messages = create_test_message("Say 'hello' exactly");
+    let request = client_with_tracing
+        .create_chat_completion_request(messages, create_test_options(None))
+        .expect("Failed to create request");
+
+    let trace_id = Uuid::new_v4();
+    let options = ChatCompletionCallOptions {
+        trace_id: Some(trace_id),
+        parent_trace_id: None,
+    };
     
-        let messages = create_test_message("Say 'hello' exactly");
-        let request = client_with_tracing
-            .create_chat_completion_request(messages, create_test_options(None))
-            .expect("Failed to create request");
+    let response = client_with_tracing
+        .complete(request, Some(options))
+        .await
+        .expect("Chat completion failed");
     
-        let trace_id = Uuid::new_v4();
-        let options = ChatCompletionCallOptions {
-            trace_id: Some(trace_id),
-        };
-        
-        let response = client_with_tracing
-            .complete(request, Some(options))
-            .await
-            .expect("Chat completion failed");
-        
-        assert!(response.choices[0].message.content.is_some(), "Response content should not be None");
-        // The model should generate some response, but we won't check for exact text
-        assert!(!response.choices[0].message.content.as_ref().unwrap().is_empty(), "Response should not be empty");
+    assert!(response.choices[0].message.content.is_some(), "Response content should not be None");
+    // The model should generate some response, but we won't check for exact text
+    assert!(!response.choices[0].message.content.as_ref().unwrap().is_empty(), "Response should not be empty");
 }
 
 #[tokio::test]
@@ -154,9 +157,13 @@ async fn test_chat_completion_stream() {
     // Test streaming with tracing
     let mut mock_tracer = MockTracerTest::new();
     mock_tracer
-        .expect_record_stream_span()
+        .expect_start_trace()
         .times(1)
-        .returning(|_, _, _, _, _, _| ());
+        .returning(|_, _, _, _, _, _| Ok(()));
+    mock_tracer
+        .expect_end_trace()
+        .times(1)
+        .returning(|_, _, _| Ok(()));
     
     let client_with_tracing = client.with_tracer(Arc::new(mock_tracer));
     
@@ -168,6 +175,7 @@ async fn test_chat_completion_stream() {
     let trace_id = Uuid::new_v4();
     let options = ChatCompletionCallOptions {
         trace_id: Some(trace_id),
+        parent_trace_id: None,
     };
     
     let mut stream = client_with_tracing
