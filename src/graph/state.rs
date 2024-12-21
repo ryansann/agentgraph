@@ -96,12 +96,6 @@ where
     }
 }
 
-impl Clone for Box<dyn GraphState> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,7 +153,6 @@ mod tests {
         
         // Test cloning through GraphState trait
         let boxed_state: Box<dyn GraphState> = Box::new(state.clone());
-        let cloned_state = boxed_state.clone();
         
         // Test merging
         state.merge(Box::new(other_state)).unwrap();

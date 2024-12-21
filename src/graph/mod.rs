@@ -8,8 +8,8 @@ pub use node::{Context, Node, FunctionNode};
 pub use state::{Built, NotBuilt, Edge, NodeConfig, GraphState};
 use crate::types::{Error, Result};
 
-const START: &str = "_START_";
-const END: &str = "_END_";
+pub const START: &str = "_START_";
+pub const END: &str = "_END_";
 
 /// A graph that executes nodes in a defined order
 #[derive(Debug)]
@@ -166,9 +166,10 @@ mod tests {
         let built_graph = {
             let mut graph = Graph::new();
             graph.add_node(node1)
-            .add_node(node2)
-            .add_edge("node1", "node2")
-            .add_edge(START, "node1");
+                .add_node(node2)
+                .add_edge("node1", "node2")
+                .add_edge(START, "node1")
+                .add_edge("node2", END);
             graph.build()
         };
 
@@ -190,11 +191,12 @@ mod tests {
         let built_graph = {
             let mut graph = Graph::new();
             graph.add_node(node1)
-            .add_node(node2)
-            .add_edge(START, "node1")
-            .add_conditional_edge("node1", |state: &i32| {
-                if *state < 5 { "node2".into() } else { END.into() }
-            });
+                .add_node(node2)
+                .add_edge(START, "node1")
+                .add_edge("node2", END)
+                .add_conditional_edge("node1", |state: &i32| {
+                    if *state < 5 { "node2".into() } else { END.into() }
+                });
             graph.build()
         };
 

@@ -7,7 +7,7 @@ pub mod utils;
 pub mod prelude {
     //! Convenient re-exports of commonly used types
     //pub use crate::agent::{BaseAgent, Tool, LLM};
-    pub use crate::graph::{Graph, Node, Context, FunctionNode};
+    pub use crate::graph::{Graph, Node, Context, FunctionNode, START, END};
     pub use crate::types::{Message, MessageType, Result, Error, MessagesState};
 }
 

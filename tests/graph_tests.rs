@@ -54,9 +54,10 @@ async fn test_basic_counter_flow() {
     let built_graph = {
         let mut graph = Graph::new();
         graph.add_node(increment_node)
-        .add_node(double_node)
-        .add_edge("increment", "double")
-        .add_edge("_START_", "increment");
+            .add_node(double_node)
+            .add_edge(START, "increment")
+            .add_edge("increment", "double")
+            .add_edge("double", END);
         graph.build()
     };
 
@@ -70,37 +71,37 @@ async fn test_basic_counter_flow() {
 
 #[tokio::test]
 async fn test_conditional_routing() {
-    let even_node = FunctionNode::new("even", |_ctx, mut state: CounterState| async move {
+    let even_node = FunctionNode::new("odd", |_ctx, mut state: CounterState| async move {
         state.count *= 2;
-        state.record_operation("even");
+        state.record_operation("odd");
         Ok(state)
     });
 
-    let odd_node = FunctionNode::new("odd", |_ctx, mut state: CounterState| async move {
+    let odd_node = FunctionNode::new("even", |_ctx, mut state: CounterState| async move {
         state.count = state.count * 2 + 1;
-        state.record_operation("odd");
+        state.record_operation("even");
         Ok(state)
     });
 
     let built_graph = {
         let mut graph = Graph::new();
         graph.add_node(even_node)
-        .add_node(odd_node)
-        .add_edge("_START_", "even")
-        .add_conditional_edge("even", |state: &CounterState| {
-            if state.count % 2 == 0 {
-                "even".to_string()
-            } else {
-                "odd".to_string()
-            }
-        })
-        .add_conditional_edge("odd", |state: &CounterState| {
-            if state.count > 100 {
-                "_END_".to_string()
-            } else {
-                "even".to_string()
-            }
-        });
+            .add_node(odd_node)
+            .add_edge(START, "even")
+            .add_conditional_edge("even", |state: &CounterState| {
+                if state.count % 2 == 0 {
+                    "even".to_string()
+                } else {
+                    "odd".to_string()
+                }
+            })
+            .add_conditional_edge("odd", |state: &CounterState| {
+                if state.count > 100 {
+                    END.to_string()
+                } else {
+                    "even".to_string()
+                }
+            });
         graph.build()
     };
 
@@ -127,7 +128,8 @@ async fn test_message_flow() {
     let built_graph = {
         let mut graph = Graph::new();
         graph.add_node(process_node)
-        .add_edge("_START_", "process");
+            .add_edge(START, "process")
+            .add_edge("process", END);
         graph.build()
     };
 
@@ -180,7 +182,8 @@ async fn test_retry_behavior() {
     let built_graph = {
         let mut graph = Graph::new();
         graph.add_node(flaky_node)
-        .add_edge("_START_", "flaky");
+            .add_edge(START, "flaky")
+            .add_edge("flaky", END);
         graph.build()
     };
 
@@ -209,25 +212,26 @@ async fn test_complex_workflow() {
     let built_graph = {
         let mut graph = Graph::new();
         graph.add_node(create_test_node("step1", |mut state| {
-            state.count += 1;
-            state.record_operation("step1");
-            state
-        }))
-        .add_node(create_test_node("step2", |mut state| {
-            state.count *= 2;
-            state.record_operation("step2");
-            state
-        }))
-        .add_node(create_test_node("step3", |mut state| {
-            state.count -= 3;
-            state.record_operation("step3");
-            state
-        }))
-        .add_edge("_START_", "step1")
-        .add_conditional_edge("step1", move |state: &CounterState| {
-            if state.count > 0 { "step2".to_string() } else { "step3".to_string() }
-        })
-        .add_edge("step2", "step3");
+                state.count += 1;
+                state.record_operation("step1");
+                state
+            }))
+            .add_node(create_test_node("step2", |mut state| {
+                state.count *= 2;
+                state.record_operation("step2");
+                state
+            }))
+            .add_node(create_test_node("step3", |mut state| {
+                state.count -= 3;
+                state.record_operation("step3");
+                state
+            }))
+            .add_edge(START, "step1")
+            .add_conditional_edge("step1", move |state: &CounterState| {
+                if state.count > 0 { "step2".to_string() } else { "step3".to_string() }
+            })
+            .add_edge("step2", "step3")
+            .add_edge("step3", END);
         graph.build()
     };
 
