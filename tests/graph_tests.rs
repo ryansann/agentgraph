@@ -2,6 +2,13 @@ use agentgraph::prelude::*;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use async_openai::types::{
+    ChatCompletionRequestMessage,
+    ChatCompletionRequestUserMessageArgs,
+    ChatCompletionRequestAssistantMessageArgs,
+    ChatCompletionRequestUserMessageContent,
+    ChatCompletionRequestAssistantMessageContent,
+};
 
 // Custom test state
 #[derive(Debug, Clone)]
@@ -114,13 +121,56 @@ async fn test_conditional_routing() {
     println!("History: {:?}", final_state.history);
 }
 
-// Test message-based state (similar to agent usage)
+// Test message-based state using async-openai types
+#[derive(Debug, Clone)]
+struct ChatState {
+    messages: Vec<ChatCompletionRequestMessage>,
+}
+
+impl ChatState {
+    fn new() -> Self {
+        Self {
+            messages: Vec::new(),
+        }
+    }
+
+    fn add_user_message(&mut self, content: &str) -> Result<()> {
+        let message = ChatCompletionRequestUserMessageArgs::default()
+            .content(content)
+            .build()
+            .map_err(|e| Error::Other(e.into()))?;
+        self.messages.push(ChatCompletionRequestMessage::User(message));
+        Ok(())
+    }
+
+    fn add_assistant_message(&mut self, content: &str) -> Result<()> {
+        let content = ChatCompletionRequestAssistantMessageContent::Text(content.to_string());
+        let message = ChatCompletionRequestAssistantMessageArgs::default()
+            .content(content)
+            .build()
+            .map_err(|e| Error::Other(e.into()))?;
+        self.messages.push(ChatCompletionRequestMessage::Assistant(message));
+        Ok(())
+    }
+}
+
 #[tokio::test]
-async fn test_message_flow() {
-    let process_node = FunctionNode::new("process", |_ctx, mut state: MessagesState| async move {
-        if let Some(last_msg) = state.last_message() {
-            let content = format!("Processed: {}", last_msg.content);
-            state.add_message(Message::ai(content));
+async fn test_chat_flow() {
+    let process_node = FunctionNode::new("process", |_ctx, mut state: ChatState| async move {
+        if let Some(last_msg) = state.messages.last() {
+            match last_msg {
+                ChatCompletionRequestMessage::User(msg) => {
+                    let content = match &msg.content {
+                        ChatCompletionRequestUserMessageContent::Text(text) => text.clone(),
+                        ChatCompletionRequestUserMessageContent::Array(_) => {
+                            return Err(Error::ExecutionError("Array content not supported".into()));
+                        }
+                    };
+                    let response = format!("Processed: {}", content);
+                    state.add_assistant_message(&response)?;
+                }
+                _ => {}
+            }
         }
         Ok(state)
     });
@@ -134,16 +184,21 @@ async fn test_message_flow() {
     };
 
     let ctx = Context::new("test");
-    let mut initial_state = MessagesState::new();
-    initial_state.add_message(Message::human("Test message"));
+    let mut initial_state = ChatState::new();
+    initial_state.add_user_message("Test message").unwrap();
 
     let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
     
     assert_eq!(final_state.messages.len(), 2);
-    assert_eq!(
-        final_state.messages.last().unwrap().content,
-        "Processed: Test message"
-    );
+    if let ChatCompletionRequestMessage::Assistant(msg) = &final_state.messages[1] {
+        if let Some(ChatCompletionRequestAssistantMessageContent::Text(content)) = &msg.content {
+            assert_eq!(content, "Processed: Test message");
+        } else {
+            panic!("Assistant message has invalid content");
+        }
+    } else {
+        panic!("Expected assistant message");
+    }
 }
 
 // Test error handling and retries

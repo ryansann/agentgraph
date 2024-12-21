@@ -8,7 +8,7 @@ pub mod prelude {
     //! Convenient re-exports of commonly used types
     pub use crate::completion::{ChatClient, TracingProvider, ChatClientImpl};
     pub use crate::graph::{Graph, Node, Context, FunctionNode, START, END};
-    pub use crate::types::{Message, MessageType, Result, Error, MessagesState};
+    pub use crate::types::{Result, Error};
 }
 
 // Re-export main types
