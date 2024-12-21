@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::any::Any;
 
 /// Marker types for graph construction states
+#[derive(Debug)]
 pub struct NotBuilt;
+#[derive(Debug)]
 pub struct Built;
 
 /// Represents a condition for edge transitions

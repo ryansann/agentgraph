@@ -52,7 +52,7 @@ async fn test_basic_counter_flow() {
     });
 
     let built_graph = {
-        let mut graph = Graph::new();
+        let mut graph = Graph::new("g");
         graph.add_node(increment_node)
             .add_node(double_node)
             .add_edge(START, "increment")
@@ -84,7 +84,7 @@ async fn test_conditional_routing() {
     });
 
     let built_graph = {
-        let mut graph = Graph::new();
+        let mut graph = Graph::new("g");
         graph.add_node(even_node)
             .add_node(odd_node)
             .add_edge(START, "even")
@@ -126,7 +126,7 @@ async fn test_message_flow() {
     });
 
     let built_graph = {
-        let mut graph = Graph::new();
+        let mut graph = Graph::new("g");
         graph.add_node(process_node)
             .add_edge(START, "process")
             .add_edge("process", END);
@@ -180,7 +180,7 @@ async fn test_retry_behavior() {
     };
 
     let built_graph = {
-        let mut graph = Graph::new();
+        let mut graph = Graph::new("g");
         graph.add_node(flaky_node)
             .add_edge(START, "flaky")
             .add_edge("flaky", END);
@@ -210,7 +210,7 @@ fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState
 #[tokio::test]
 async fn test_complex_workflow() {
     let built_graph = {
-        let mut graph = Graph::new();
+        let mut graph = Graph::new("g");
         graph.add_node(create_test_node("step1", |mut state| {
                 state.count += 1;
                 state.record_operation("step1");

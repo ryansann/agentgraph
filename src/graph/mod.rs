@@ -3,10 +3,13 @@ mod state;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::fmt::Debug;
+use async_trait::async_trait;
+
+use crate::types::{Error, Result};
 
 pub use node::{Context, Node, FunctionNode};
 pub use state::{Built, NotBuilt, Edge, NodeConfig, GraphState};
-use crate::types::{Error, Result};
 
 pub const START: &str = "_START_";
 pub const END: &str = "_END_";
@@ -14,6 +17,7 @@ pub const END: &str = "_END_";
 /// A graph that executes nodes in a defined order
 #[derive(Debug)]
 pub struct Graph<State, BuildState = NotBuilt> {
+    graph_name: String,
     nodes: HashMap<String, Arc<dyn Node<State>>>,
     edges: HashMap<String, Edge<State>>,
     configs: HashMap<String, NodeConfig>,
@@ -25,8 +29,9 @@ where
     State: Send + Sync + 'static,
 {
     /// Create a new graph
-    pub fn new() -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         Self {
+            graph_name: name.into(),
             nodes: HashMap::new(),
             edges: HashMap::new(),
             configs: HashMap::new(),
@@ -69,6 +74,7 @@ where
         // Validate graph structure here
         // For now, we just transform the state
         Graph {
+            graph_name: self.graph_name,
             nodes: self.nodes,
             edges: self.edges,
             configs: self.configs,
@@ -151,6 +157,22 @@ where
     }
 }
 
+#[async_trait]
+impl<State> Node<State> for Graph<State, Built>
+where
+    State: Clone + Send + Sync + Debug + 'static,
+{
+    async fn process(&self, ctx: &Context, state: State) -> Result<State> {
+        // Simply delegate to the run method
+        self.run(ctx, state).await
+    }
+
+    fn name(&self) -> &str {
+        // Each graph should have a name for debugging and tracing
+        &self.graph_name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,7 +186,7 @@ mod tests {
 
         // Build graph
         let built_graph = {
-            let mut graph = Graph::new();
+            let mut graph = Graph::new("g");
             graph.add_node(node1)
                 .add_node(node2)
                 .add_edge("node1", "node2")
@@ -189,7 +211,7 @@ mod tests {
 
         // Build graph with condition
         let built_graph = {
-            let mut graph = Graph::new();
+            let mut graph = Graph::new("g");
             graph.add_node(node1)
                 .add_node(node2)
                 .add_edge(START, "node1")
