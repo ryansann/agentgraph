@@ -1,9 +1,10 @@
 use async_openai::{
     types::{
-        ChatCompletionRequestUserMessageArgs,
         CreateChatCompletionRequestArgs,
-        CreateChatCompletionResponse, 
+        CreateChatCompletionRequest,
+        CreateChatCompletionResponse,
         CreateChatCompletionStreamResponse,
+        ChatCompletionRequestMessage,
     },
     Client as OpenAIClient,
     config::OpenAIConfig,
@@ -23,7 +24,7 @@ pub trait TracingProvider: Send + Sync {
         name: String,
         start_time: SystemTime,
         end_time: SystemTime,
-        input: String,
+        messages: Vec<ChatCompletionRequestMessage>,
         output: CreateChatCompletionResponse,
     );
     
@@ -33,7 +34,7 @@ pub trait TracingProvider: Send + Sync {
         name: String,
         start_time: SystemTime,
         end_time: SystemTime,
-        input: String,
+        messages: Vec<ChatCompletionRequestMessage>,
         output: String,
     );
 }
@@ -43,13 +44,13 @@ pub trait ChatClient: Send + Sync {
     async fn chat_completion(
         &self,
         model: &str,
-        content: &str,
+        messages: Vec<ChatCompletionRequestMessage>,
     ) -> Result<CreateChatCompletionResponse, Box<dyn std::error::Error + Send + Sync>>;
 
     async fn chat_completion_stream(
         &self,
         model: &str,
-        content: &str,
+        messages: Vec<ChatCompletionRequestMessage>,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
         Box<dyn std::error::Error + Send + Sync>
@@ -77,6 +78,21 @@ impl ChatClientImpl {
             tracer: Some(tracer),
         }
     }
+
+    // Helper function to create a completion request
+    fn create_completion_request(
+        &self,
+        model: &str, 
+        messages: Vec<ChatCompletionRequestMessage>,
+        stream: bool,
+    ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(CreateChatCompletionRequestArgs::default()
+            .model(model)
+            .messages(messages)
+            .stream(stream)
+            .build()?
+            .into())
+    }
 }
 
 #[async_trait]
@@ -84,20 +100,12 @@ impl ChatClient for ChatClientImpl {
     async fn chat_completion(
         &self,
         model: &str,
-        content: &str,
+        messages: Vec<ChatCompletionRequestMessage>,
     ) -> Result<CreateChatCompletionResponse, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = SystemTime::now();
         let trace_id = Uuid::new_v4();
 
-        let message = ChatCompletionRequestUserMessageArgs::default()
-            .content(content)
-            .build()?;
-
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(model)
-            .messages([message.into()])
-            .build()?;
-
+        let request = self.create_completion_request(model, messages.clone(), false)?;
         let response = self.client.chat().create(request).await?;
         let end_time = SystemTime::now();
 
@@ -108,7 +116,7 @@ impl ChatClient for ChatClientImpl {
                     "chat_completion".into(),
                     start_time,
                     end_time,
-                    content.to_string(),
+                    messages,
                     response.clone(),
                 )
                 .await;
@@ -120,7 +128,7 @@ impl ChatClient for ChatClientImpl {
     async fn chat_completion_stream(
         &self,
         model: &str,
-        content: &str,
+        messages: Vec<ChatCompletionRequestMessage>,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
         Box<dyn std::error::Error + Send + Sync>
@@ -128,18 +136,9 @@ impl ChatClient for ChatClientImpl {
         let start_time = SystemTime::now();
         let trace_id = Uuid::new_v4();
         let tracer = self.tracer.clone();
-        let content = content.to_string();
+        let messages_clone = messages.clone();
 
-        let message = ChatCompletionRequestUserMessageArgs::default()
-            .content(content.clone())
-            .build()?;
-
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(model)
-            .messages([message.into()])
-            .stream(true)
-            .build()?;
-
+        let request = self.create_completion_request(model, messages, true)?;
         let mut stream = self.client.chat().create_stream(request).await?;
 
         let stream = async_stream::stream! {
@@ -148,8 +147,10 @@ impl ChatClient for ChatClientImpl {
             while let Some(result) = stream.next().await {
                 match result {
                     Ok(response) => {
-                        if let Some(content) = &response.choices[0].delta.content {
-                            full_response.push_str(content);
+                        if let Some(delta) = response.choices.first() {
+                            if let Some(content) = &delta.delta.content {
+                                full_response.push_str(content);
+                            }
                         }
                         yield Ok(response);
                     }
@@ -157,7 +158,6 @@ impl ChatClient for ChatClientImpl {
                 }
             }
 
-            // Record the complete span after stream ends
             if let Some(tracer) = tracer {
                 let end_time = SystemTime::now();
                 tracer
@@ -166,7 +166,7 @@ impl ChatClient for ChatClientImpl {
                         "chat_completion_stream".into(),
                         start_time,
                         end_time,
-                        content,
+                        messages_clone,
                         full_response,
                     )
                     .await;

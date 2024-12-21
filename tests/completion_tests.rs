@@ -1,7 +1,11 @@
 // tests/chat_client.rs
 use std::sync::Arc;
 use std::time::SystemTime;
-use async_openai::types::CreateChatCompletionResponse;
+use async_openai::types::{
+    CreateChatCompletionResponse,
+    ChatCompletionRequestMessage,
+    ChatCompletionRequestUserMessageArgs,
+};
 use futures::StreamExt;
 use mockall::mock;
 use mockall::predicate::*;
@@ -23,7 +27,7 @@ mock! {
             name: String,
             start_time: SystemTime,
             end_time: SystemTime,
-            input: String,
+            messages: Vec<ChatCompletionRequestMessage>,
             output: CreateChatCompletionResponse,
         );
         
@@ -33,10 +37,18 @@ mock! {
             name: String,
             start_time: SystemTime,
             end_time: SystemTime,
-            input: String,
+            messages: Vec<ChatCompletionRequestMessage>,
             output: String,
         );
     }
+}
+
+fn create_test_message(content: &str) -> Vec<ChatCompletionRequestMessage> {
+    let message = ChatCompletionRequestUserMessageArgs::default()
+        .content(content)
+        .build()
+        .expect("Failed to build message");
+    vec![ChatCompletionRequestMessage::User(message)]
 }
 
 #[tokio::test]
@@ -47,10 +59,10 @@ async fn test_chat_completion() {
     let client = ChatClientImpl::new(api_key.clone());
     
     // Test simple completion
-    let content = "Say 'test response' exactly";
+    let messages = create_test_message("Say 'test response' exactly");
     
     let response = client
-        .chat_completion(TEST_MODEL, content)
+        .chat_completion(TEST_MODEL, messages)
         .await
         .expect("Chat completion failed");
     
@@ -68,10 +80,10 @@ async fn test_chat_completion() {
     
     let client_with_tracing = client.with_tracer(Arc::new(mock_tracer));
     
-    let content = "Say 'traced test' exactly";
+    let messages = create_test_message("Say 'traced test' exactly");
     
     let response = client_with_tracing
-        .chat_completion(TEST_MODEL, content)
+        .chat_completion(TEST_MODEL, messages)
         .await
         .expect("Chat completion failed");
     
@@ -89,10 +101,10 @@ async fn test_chat_completion_stream() {
     let client = ChatClientImpl::new(api_key.clone());
     
     // Test streaming
-    let content = "Count from 1 to 3";
+    let messages = create_test_message("Count from 1 to 3");
     
     let mut stream = client
-        .chat_completion_stream(TEST_MODEL, content)
+        .chat_completion_stream(TEST_MODEL, messages)
         .await
         .expect("Failed to create stream");
 
@@ -127,10 +139,10 @@ async fn test_chat_completion_stream() {
     
     let client_with_tracing = client.with_tracer(Arc::new(mock_tracer));
     
-    let content = "Count from 4 to 6";
+    let messages = create_test_message("Count from 4 to 6");
     
     let mut stream = client_with_tracing
-        .chat_completion_stream(TEST_MODEL, content)
+        .chat_completion_stream(TEST_MODEL, messages)
         .await
         .expect("Failed to create stream");
 
