@@ -73,7 +73,7 @@ pub fn tools_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         // parse param + return type
-        let (params_ty, success_ty) = match parse_param_and_return(method_fn) {
+        let (params_ty, success_ty, is_result) = match parse_param_and_return(method_fn) {
             Ok(pair) => pair,
             Err(err) => {
                 expansions.push(err.to_compile_error());
@@ -86,6 +86,17 @@ pub fn tools_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             method_fn.sig.ident.span(),
         );
         let method_ident = &method_fn.sig.ident;
+
+        // If it's a `Result<T, E>`, we do `.await?`, else `.await`
+        let call_stmt = if is_result {
+            quote! {
+                Ok(self.0.#method_ident(params).await?)
+            }
+        } else {
+            quote! {
+                Ok(self.0.#method_ident(params).await)
+            }
+        };
 
         let expanded_one = quote! {
             #[derive(Clone)]
@@ -103,7 +114,7 @@ pub fn tools_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     &self,
                     params: Self::Params
                 ) -> std::result::Result<Self::Response, ToolError> {
-                    self.0.#method_ident(params).await
+                    #call_stmt
                 }
             }
         };
@@ -164,31 +175,70 @@ fn find_method_by_name<'a>(items: &'a [ImplItem], name: &str) -> Option<&'a Impl
     None
 }
 
-/// Parse out the single "params" type and the function's return type
-/// from `fn method(&self, params: T) -> Result<U, E>`.
-fn parse_param_and_return(m: &ImplItemFn) -> Result<(Type, Type), Error> {
-    // 1. Find the typed param (besides &self)
+/// Return (params_type, success_type, is_result), where:
+/// - `params_type` is the type of the method's second argument (besides `&self`)
+/// - `success_type` is either T or the T from `Result<T, E>`
+/// - `is_result` is `true` if the user returns `Result<T, E>`, else false.
+fn parse_param_and_return(m: &ImplItemFn) -> Result<(Type, Type, bool), Error> {
+    // 1) Find the typed param (besides &self)
     let mut found_param_ty = None;
     for arg in &m.sig.inputs {
         if let FnArg::Typed(pat_type) = arg {
-            // In syn 2.0, pat_type.ty is a Box<Type>
-            let ty: Type = *pat_type.ty.clone();
+            // pat_type.ty is a Box<Type>
+            let ty = *pat_type.ty.clone();
             found_param_ty = Some(ty);
             break;
         }
     }
     let params_ty = found_param_ty.ok_or_else(|| {
-        Error::new_spanned(m, "Method must have a typed parameter, e.g. `fn foo(&self, params: X) -> ...`")
+        Error::new_spanned(
+            m,
+            "Method must have a typed parameter, e.g. `fn foo(&self, params: X) -> ...`"
+        )
     })?;
 
-    // 2. The return type
-    match &m.sig.output {
-        ReturnType::Default => Err(Error::new_spanned(
-            m,
-            "Method must return a type (like `Result<..., ...>`)",
-        )),
-        ReturnType::Type(_, box_ty) => Ok((params_ty, *box_ty.clone())),
+    // 2) Extract the final success type from the method's return.
+    //    If it's `Result<T, E>`, we parse out `T` and set is_result = true.
+    //    If it's plain T, we set is_result = false.
+    let return_ty = match &m.sig.output {
+        ReturnType::Default => {
+            return Err(Error::new_spanned(
+                m,
+                "Method must return a type (like T or Result<T, E>)",
+            ));
+        }
+        ReturnType::Type(_, box_ty) => *box_ty.clone(),
+    };
+
+    let (success_ty, is_result) = parse_success_type(return_ty)?;
+    Ok((params_ty, success_ty, is_result))
+}
+
+/// If the user returns `Result<T, E>`, parse out `T` and return `(T, true)`.
+/// If the user returns a plain type `T`, return `(T, false)`.
+fn parse_success_type(ty: Type) -> Result<(Type, bool), Error> {
+    if let Type::Path(type_path) = &ty {
+        if let Some(last_seg) = type_path.path.segments.last() {
+            // e.g. `Result<T, E>` has the last segment named "Result"
+            if last_seg.ident == "Result" {
+                // Check generics for the success type
+                if let syn::PathArguments::AngleBracketed(ref generic_args) = last_seg.arguments {
+                    let mut args_iter = generic_args.args.iter();
+                    let first_arg = args_iter.next();
+                    let second_arg = args_iter.next();
+
+                    // Expect `Result<SuccessType, ToolError>` shape
+                    if let (Some(syn::GenericArgument::Type(success)), Some(_)) = (first_arg, second_arg)
+                    {
+                        // success is T
+                        return Ok((success.clone(), true));
+                    }
+                }
+            }
+        }
     }
+    // Else, it's a plain type
+    Ok((ty, false))
 }
 
 /// Convert a type to a sanitized string we can embed in an identifier.

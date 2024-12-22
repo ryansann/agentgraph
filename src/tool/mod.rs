@@ -14,12 +14,12 @@ pub use async_openai::types::{
 };
 
 /// Error type for tool operations
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum ToolError {
     /// Error during schema generation or validation
     Schema(String),
     /// Error during tool execution
-    Execution(Box<dyn Error + Send + Sync>),
+    Execution(String),
     /// Error during serialization/deserialization
     Serialization(String),
 }
@@ -36,6 +36,11 @@ impl std::fmt::Display for ToolError {
 
 impl Error for ToolError {}
 
+// Helper function for implementations
+pub(crate) fn to_tool_error<E: Error + Send + Sync + 'static>(err: E) -> ToolError {
+    ToolError::Execution(err.to_string())
+}
+
 /// Trait for types that can be converted to JSON Schema
 pub trait JsonSchema {
     /// Generate JSON Schema representation of the type
@@ -48,7 +53,7 @@ pub trait ToolFunction {
     /// The parameter type for the tool
     type Params: JsonSchema + DeserializeOwned;
     /// The response type for the tool
-    type Response: JsonSchema + Serialize;
+    type Response: Serialize;
 
     /// Get the name of the tool
     fn name() -> &'static str;
@@ -59,11 +64,6 @@ pub trait ToolFunction {
     /// Get the JSON Schema for the tool's parameters
     fn parameters_schema() -> Value {
         Self::Params::schema()
-    }
-
-    /// Get the JSON Schema for the tool's response
-    fn response_schema() -> Value {
-        Self::Response::schema()
     }
 
     /// Get the complete tool schema for OpenAI
@@ -82,9 +82,3 @@ pub trait ToolFunction {
     /// Execute the tool with the given parameters
     async fn execute(&self, params: Self::Params) -> Result<Self::Response, ToolError>;
 }
-
-// Helper function for implementations
-pub(crate) fn to_tool_error<E: Error + Send + Sync + 'static>(err: E) -> ToolError {
-    ToolError::Execution(Box::new(err))
-}
-
