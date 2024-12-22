@@ -29,7 +29,6 @@ pub mod prelude {
         Error
     };
     pub use crate::tool::{
-        tool, 
         JsonSchema, 
         ToolFunction, 
         ToolError

@@ -1,10 +1,9 @@
-// src/tool/mod.rs
-pub use agentgraph_macros::tool;
-
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::error::Error;
 use async_trait::async_trait;
+use schemars as sm; // rename for convenience
+use sm::JsonSchema as SchemarsJsonSchema;
 
 // Re-export key types and traits
 pub use async_openai::types::{
@@ -16,11 +15,8 @@ pub use async_openai::types::{
 /// Error type for tool operations
 #[derive(Debug, Serialize)]
 pub enum ToolError {
-    /// Error during schema generation or validation
     Schema(String),
-    /// Error during tool execution
     Execution(String),
-    /// Error during serialization/deserialization
     Serialization(String),
 }
 
@@ -36,37 +32,54 @@ impl std::fmt::Display for ToolError {
 
 impl Error for ToolError {}
 
-// Helper function for implementations
+/// Helper function for implementations
 pub(crate) fn to_tool_error<E: Error + Send + Sync + 'static>(err: E) -> ToolError {
     ToolError::Execution(err.to_string())
 }
 
-/// Trait for types that can be converted to JSON Schema
+/// Our existing trait
 pub trait JsonSchema {
-    /// Generate JSON Schema representation of the type
+    /// Generate JSON Schema representation
     fn schema() -> Value;
+}
+
+/// Blanket impl: for any type that implements `schemars::JsonSchema`,
+/// our trait just calls schemars::schema_for! to get the schema,
+/// then converts it to `serde_json::Value`.
+impl<T> JsonSchema for T 
+where
+    T: SchemarsJsonSchema,
+{
+    fn schema() -> Value {
+        // schemars::schema_for!(T) returns a `Schema`.
+        // We convert it to JSON via `serde_json::to_value`.
+        let schema_obj = sm::schema_for!(T).schema;
+        serde_json::to_value(&schema_obj).unwrap_or_else(|_| {
+            serde_json::json!({ "type": "object", "description": "error generating schema" })
+        })
+    }
 }
 
 /// Trait that must be implemented by OpenAI tool functions
 #[async_trait]
 pub trait ToolFunction {
     /// The parameter type for the tool
+    ///
+    /// Must implement our `JsonSchema` trait + `DeserializeOwned`.
+    /// Because of the blanket impl, it also needs `schemars::JsonSchema`.
     type Params: JsonSchema + DeserializeOwned;
+    
     /// The response type for the tool
     type Response: Serialize;
 
-    /// Get the name of the tool
     fn name() -> &'static str;
-
-    /// Get a description of what the tool does
     fn description() -> &'static str;
 
-    /// Get the JSON Schema for the tool's parameters
     fn parameters_schema() -> Value {
+        // By default: Self::Params::schema()
         Self::Params::schema()
     }
 
-    /// Get the complete tool schema for OpenAI
     fn get_schema() -> ChatCompletionTool {
         ChatCompletionTool {
             r#type: ChatCompletionToolType::Function,
@@ -79,6 +92,5 @@ pub trait ToolFunction {
         }
     }
 
-    /// Execute the tool with the given parameters
     async fn execute(&self, params: Self::Params) -> Result<Self::Response, ToolError>;
 }

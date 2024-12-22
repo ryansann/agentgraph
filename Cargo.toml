@@ -28,6 +28,7 @@ reqwest = "0.12.9"
 proc-macro2 = "1.0.92"
 quote = "1.0.37"
 syn = "2.0.91"
+schemars = "0.8"
 
 [dev-dependencies]
 tokio-test = "0.4"

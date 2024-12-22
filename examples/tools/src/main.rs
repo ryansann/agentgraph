@@ -6,17 +6,29 @@ use agentgraph::{
 };
 use serde::{Serialize, Deserialize};
 use serde_json::to_string;
+use schemars::JsonSchema;
 
 // Our data types
-#[derive(Clone, Serialize, Deserialize)]
-struct AddParams {
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AddParams {
     x: i32,
     y: i32,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct AddResponse {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddResponse {
     sum: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SubParams {
+    a: i32,
+    b: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubResponse {
+    diff: i32,
 }
 
 // The "tool" struct
@@ -33,9 +45,9 @@ impl MathTool {
         Ok(AddResponse { sum: params.x + params.y })
     }
 
-    async fn subtract(&self, params: (i32, i32)) -> (i32) {
+    async fn subtract(&self, params: SubParams) -> Result<SubResponse, ToolError> {
         // Return a plain type, so the macro uses `.await` (no `?`)
-        (params.0 - params.1)
+        Ok(SubResponse { diff: params.a - params.b })
     }
 
     async fn helper(&self, val: i32) -> i32 {
@@ -57,8 +69,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Add result: {}", add_res.sum);
     println!("Add schema: {}", to_string(&add_tool_schema)?);
 
-    let sub_res = ToolFunction::execute(&sub_tool, (7, 2)).await?;
-    println!("Subtract result: {}", sub_res);
+    let sub_res = ToolFunction::execute(&sub_tool, SubParams { a: 7, b: 2}).await?;
+    println!("Subtract result: {}", sub_res.diff);
     println!("Subtract schema: {}", to_string(&sub_tool_schema)?);
 
     Ok(())
