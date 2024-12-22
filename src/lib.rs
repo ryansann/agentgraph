@@ -8,7 +8,9 @@ pub mod prelude {
     //! Convenient re-exports of commonly used types
     pub use crate::completion::{
         ChatClient, 
-        ChatClientImpl, 
+        ChatClientImpl,
+        ChatCompletionRequestOptions,
+        ChatCompletionCallOptions,
         LangSmithTracer, 
         TracingProvider, 
         TracingError
