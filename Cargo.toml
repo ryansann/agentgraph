@@ -10,6 +10,7 @@ keywords = ["llm", "ai", "agent", "graph", "workflow"]
 categories = ["ai", "algorithms", "asynchronous"]
 
 [dependencies]
+agentgraph-macros = { path = "./agentgraph-macros" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = { version = "0.1", optional = true }
 async-trait = "0.1"
@@ -24,6 +25,9 @@ uuid = { version = "1.11.0", features = ["v4"] }
 async-stream = "0.3.6"
 chrono = "0.4.39"
 reqwest = "0.12.9"
+proc-macro2 = "1.0.92"
+quote = "1.0.37"
+syn = "2.0.91"
 
 [dev-dependencies]
 tokio-test = "0.4"

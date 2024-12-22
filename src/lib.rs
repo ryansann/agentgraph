@@ -3,6 +3,7 @@
 pub mod completion;
 pub mod graph;
 pub mod types;
+pub mod tool;
 
 pub mod prelude {
     //! Convenient re-exports of commonly used types
@@ -26,6 +27,12 @@ pub mod prelude {
     pub use crate::types::{
         Result, 
         Error
+    };
+    pub use crate::tool::{
+        tool, 
+        JsonSchema, 
+        ToolFunction, 
+        ToolError
     };
 }
 
