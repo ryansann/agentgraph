@@ -1,37 +1,38 @@
 use agentgraph::prelude::*;
 use agentgraph_macros::tools;
 use async_openai::types::{
-    ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestUserMessageArgs,
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     ChatCompletionToolChoiceOption,
 };
-use serde::{Serialize, Deserialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::env;
 
 // Weather tool types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-struct WeatherParams {
+#[serde(deny_unknown_fields)]
+pub struct WeatherParams {
     location: String,
-    unit: Option<String>,
+    unit: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct WeatherResponse {
+pub struct WeatherResponse {
     temperature: f32,
     conditions: String,
 }
 
 // Time conversion tool types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-struct TimeConversionParams {
+#[serde(deny_unknown_fields)]
+pub struct TimeConversionParams {
     time: String,
     from_zone: String,
     to_zone: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct TimeConversionResponse {
+pub struct TimeConversionResponse {
     converted_time: String,
 }
 
@@ -45,7 +46,10 @@ struct AssistantTools;
     convert_time = "Convert time between different time zones"
 )]
 impl AssistantTools {
-    async fn get_weather(&self, params: WeatherParams) -> Result<WeatherResponse, ToolError> {
+    async fn get_weather(
+        &self,
+        params: WeatherParams,
+    ) -> std::result::Result<WeatherResponse, ToolError> {
         // Mock weather implementation
         Ok(WeatherResponse {
             temperature: 72.0,
@@ -53,11 +57,16 @@ impl AssistantTools {
         })
     }
 
-    async fn convert_time(&self, params: TimeConversionParams) -> Result<TimeConversionResponse, ToolError> {
+    async fn convert_time(
+        &self,
+        params: TimeConversionParams,
+    ) -> Result<TimeConversionResponse, ToolError> {
         // Mock time conversion implementation
         Ok(TimeConversionResponse {
-            converted_time: format!("Converted {} from {} to {}", 
-                params.time, params.from_zone, params.to_zone),
+            converted_time: format!(
+                "Converted {} from {} to {}",
+                params.time, params.from_zone, params.to_zone
+            ),
         })
     }
 
@@ -70,8 +79,7 @@ impl AssistantTools {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Get API key from environment
-    let openai_api_key = env::var("OPENAI_API_KEY")
-        .expect("OPENAI_API_KEY must be set");
+    let openai_api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
 
     // Create the chat client
     let client = ChatClientImpl::new(openai_api_key);
@@ -93,11 +101,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .into(),
     ];
 
-    // Get schemas for both tools
-    let tools = vec![
-        AssistantToolsGetWeather::get_schema(),
-        AssistantToolsConvertTime::get_schema(),
-    ];
+    let weather_schema = <AssistantToolsGetWeather as ToolFunction>::get_schema();
+    println!(
+        "Get Weather Schema: {}",
+        serde_json::to_string_pretty(&weather_schema)?
+    );
+
+    let time_schema = <AssistantToolsConvertTime as ToolFunction>::get_schema();
+    println!(
+        "Convert Time Schema: {}",
+        serde_json::to_string_pretty(&time_schema)?
+    );
+
+    // Create tools vector for the API request
+    let tools = vec![weather_schema, time_schema];
 
     // Create request options with tools
     let options = ChatCompletionRequestOptions {
@@ -110,27 +127,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Create and send the request
     println!("Creating chat completion request...");
     let request = client.create_chat_completion_request(messages, options)?;
-    
+
     println!("\nSending request to OpenAI...");
     let response = client.complete(request, None).await?;
 
     // Process the response and tool calls
     for choice in response.choices {
-        println!("\nAssistant: {}", choice.message.content.unwrap_or_default());
-        
+        println!(
+            "\nAssistant: {}",
+            choice.message.content.unwrap_or_default()
+        );
+
         // Handle any tool calls
         if let Some(tool_calls) = choice.message.tool_calls {
+            let get_weather_name = <AssistantToolsGetWeather as ToolFunction>::name();
+            let convert_time_name = <AssistantToolsConvertTime as ToolFunction>::name();
             for tool_call in tool_calls {
                 match tool_call.function.name.as_str() {
-                    "get_weather" => {
-                        let params: WeatherParams = serde_json::from_str(&tool_call.function.arguments)?;
+                    name if name == get_weather_name => {
+                        let params: WeatherParams =
+                            serde_json::from_str(&tool_call.function.arguments)?;
                         let weather = ToolFunction::execute(&weather_tool, params).await?;
                         println!("\nWeather Tool Response:");
                         println!("Temperature: {}°F", weather.temperature);
                         println!("Conditions: {}", weather.conditions);
                     }
-                    "convert_time" => {
-                        let params: TimeConversionParams = serde_json::from_str(&tool_call.function.arguments)?;
+                    name if name == convert_time_name => {
+                        let params: TimeConversionParams =
+                            serde_json::from_str(&tool_call.function.arguments)?;
                         let time = ToolFunction::execute(&time_tool, params).await?;
                         println!("\nTime Conversion Tool Response:");
                         println!("Converted Time: {}", time.converted_time);

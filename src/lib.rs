@@ -2,37 +2,18 @@
 
 pub mod completion;
 pub mod graph;
-pub mod types;
 pub mod tool;
+pub mod types;
 
 pub mod prelude {
     //! Convenient re-exports of commonly used types
     pub use crate::completion::{
-        ChatClient, 
-        ChatClientImpl,
-        ChatCompletionRequestOptions,
-        ChatCompletionCallOptions,
-        LangSmithTracer, 
-        TracingProvider, 
-        TracingError
+        ChatClient, ChatClientImpl, ChatCompletionCallOptions, ChatCompletionRequestOptions,
+        LangSmithTracer, TracingError, TracingProvider,
     };
-    pub use crate::graph::{
-        Graph, 
-        Node, 
-        Context, 
-        FunctionNode, 
-        START, 
-        END,
-    };
-    pub use crate::types::{
-        Result, 
-        Error
-    };
-    pub use crate::tool::{
-        JsonSchema, 
-        ToolFunction, 
-        ToolError
-    };
+    pub use crate::graph::{Context, FunctionNode, Graph, Node, END, START};
+    pub use crate::tool::{JsonSchema, ToolError, ToolFunction};
+    pub use crate::types::{GraphError, GraphResult};
 }
 
 // Re-export main types

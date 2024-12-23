@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::fmt::Debug;
-use crate::types::Result;
+use crate::types::GraphResult;
 
 /// Context for node execution
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ impl Context {
 #[async_trait]
 pub trait Node<State>: Send + Sync + Debug {
     /// Process the current state and return an updated state
-    async fn process(&self, ctx: &Context, state: State) -> Result<State>;
+    async fn process(&self, ctx: &Context, state: State) -> GraphResult<State>;
     
     /// Get the name of this node
     fn name(&self) -> &str;
@@ -56,7 +56,7 @@ impl<State, F, Fut> FunctionNode<State, F>
 where
     State: Debug + Send,
     F: Fn(&Context, State) -> Fut + Send + Sync,
-    Fut: std::future::Future<Output = Result<State>> + Send,
+    Fut: std::future::Future<Output = GraphResult<State>> + Send,
 {
     pub fn new(name: impl Into<String>, f: F) -> Self {
         Self {
@@ -72,9 +72,9 @@ impl<State, F, Fut> Node<State> for FunctionNode<State, F>
 where
     State: Debug + Send + Sync,
     F: Fn(&Context, State) -> Fut + Send + Sync,
-    Fut: std::future::Future<Output = Result<State>> + Send,
+    Fut: std::future::Future<Output = GraphResult<State>> + Send,
 {
-    async fn process(&self, ctx: &Context, state: State) -> Result<State> {
+    async fn process(&self, ctx: &Context, state: State) -> GraphResult<State> {
         (self.f)(ctx, state).await
     }
 

@@ -38,7 +38,7 @@ struct IncrementNode {
 
 #[async_trait]
 impl Node<CounterState> for IncrementNode {
-    async fn process(&self, _ctx: &Context, mut state: CounterState) -> Result<CounterState> {
+    async fn process(&self, _ctx: &Context, mut state: CounterState) -> GraphResult<CounterState> {
         state.count += self.amount;
         state.record_operation(&format!("increment_{}", self.amount));
         Ok(state)
@@ -134,21 +134,21 @@ impl ChatState {
         }
     }
 
-    fn add_user_message(&mut self, content: &str) -> Result<()> {
+    fn add_user_message(&mut self, content: &str) -> GraphResult<()> {
         let message = ChatCompletionRequestUserMessageArgs::default()
             .content(content)
             .build()
-            .map_err(|e| Error::Other(e.into()))?;
+            .map_err(|e| GraphError::Other(e.into()))?;
         self.messages.push(ChatCompletionRequestMessage::User(message));
         Ok(())
     }
 
-    fn add_assistant_message(&mut self, content: &str) -> Result<()> {
+    fn add_assistant_message(&mut self, content: &str) -> GraphResult<()> {
         let content = ChatCompletionRequestAssistantMessageContent::Text(content.to_string());
         let message = ChatCompletionRequestAssistantMessageArgs::default()
             .content(content)
             .build()
-            .map_err(|e| Error::Other(e.into()))?;
+            .map_err(|e| GraphError::Other(e.into()))?;
         self.messages.push(ChatCompletionRequestMessage::Assistant(message));
         Ok(())
     }
@@ -163,7 +163,7 @@ async fn test_chat_flow() {
                     let content = match &msg.content {
                         ChatCompletionRequestUserMessageContent::Text(text) => text.clone(),
                         ChatCompletionRequestUserMessageContent::Array(_) => {
-                            return Err(Error::ExecutionError("Array content not supported".into()));
+                            return Err(GraphError::ExecutionError("Array content not supported".into()));
                         }
                     };
                     let response = format!("Processed: {}", content);
@@ -210,12 +210,12 @@ struct FlakyNode {
 
 #[async_trait]
 impl Node<CounterState> for FlakyNode {
-    async fn process(&self, _ctx: &Context, state: CounterState) -> Result<CounterState> {
+    async fn process(&self, _ctx: &Context, state: CounterState) -> GraphResult<CounterState> {
         let mut attempts = self.attempts.lock().await;
         *attempts += 1;
         
         if *attempts <= self.max_failures {
-            Err(Error::ExecutionError("Temporary failure".into()))
+            Err(GraphError::ExecutionError("Temporary failure".into()))
         } else {
             Ok(state)
         }

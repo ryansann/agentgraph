@@ -1,16 +1,12 @@
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::Value;
-use std::error::Error;
 use async_trait::async_trait;
 use schemars as sm; // rename for convenience
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value;
 use sm::JsonSchema as SchemarsJsonSchema;
+use std::error::Error;
 
 // Re-export key types and traits
-pub use async_openai::types::{
-    ChatCompletionTool,
-    ChatCompletionToolType,
-    FunctionObject,
-};
+pub use async_openai::types::{ChatCompletionTool, ChatCompletionToolType, FunctionObject};
 
 /// Error type for tool operations
 #[derive(Debug, Serialize)]
@@ -46,7 +42,7 @@ pub trait JsonSchema {
 /// Blanket impl: for any type that implements `schemars::JsonSchema`,
 /// our trait just calls schemars::schema_for! to get the schema,
 /// then converts it to `serde_json::Value`.
-impl<T> JsonSchema for T 
+impl<T> JsonSchema for T
 where
     T: SchemarsJsonSchema,
 {
@@ -54,9 +50,9 @@ where
         // schemars::schema_for!(T) returns a `Schema`.
         // We convert it to JSON via `serde_json::to_value`.
         let schema_obj = sm::schema_for!(T).schema;
-        serde_json::to_value(&schema_obj).unwrap_or_else(|_| {
-            serde_json::json!({ "type": "object", "description": "error generating schema" })
-        })
+        serde_json::to_value(&schema_obj).unwrap_or_else(
+            |_| serde_json::json!({ "type": "object", "description": "error generating schema" }),
+        )
     }
 }
 
@@ -68,7 +64,7 @@ pub trait ToolFunction {
     /// Must implement our `JsonSchema` trait + `DeserializeOwned`.
     /// Because of the blanket impl, it also needs `schemars::JsonSchema`.
     type Params: JsonSchema + DeserializeOwned;
-    
+
     /// The response type for the tool
     type Response: Serialize;
 

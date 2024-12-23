@@ -1,15 +1,15 @@
 mod node;
 mod state;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::fmt::Debug;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::Arc;
 
-use crate::types::{Error, Result};
+use crate::types::{GraphError, GraphResult};
 
-pub use node::{Context, Node, FunctionNode};
-pub use state::{Built, NotBuilt, Edge, NodeConfig, GraphState};
+pub use node::{Context, FunctionNode, Node};
+pub use state::{Built, Edge, GraphState, NodeConfig, NotBuilt};
 
 pub const START: &str = "_START_";
 pub const END: &str = "_END_";
@@ -59,7 +59,8 @@ where
     where
         F: Fn(&State) -> String + Send + Sync + 'static,
     {
-        self.edges.insert(from.into(), Edge::Conditional(Arc::new(condition)));
+        self.edges
+            .insert(from.into(), Edge::Conditional(Arc::new(condition)));
         self
     }
 
@@ -88,7 +89,7 @@ where
     State: Clone + Send + Sync + 'static,
 {
     /// Run the graph with an initial state
-    pub async fn run(&self, ctx: &Context, initial_state: State) -> Result<State> {
+    pub async fn run(&self, ctx: &Context, initial_state: State) -> GraphResult<State> {
         let mut current_state = initial_state;
         let mut current_node = START.to_string();
 
@@ -100,12 +101,15 @@ where
                 None => {
                     if current_node == START {
                         // If we're at START with no edge, try to find a default starting node
-                        self.nodes.keys().next()
-                            .ok_or_else(|| Error::InvalidState("Graph has no nodes".into()))?
+                        self.nodes
+                            .keys()
+                            .next()
+                            .ok_or_else(|| GraphError::InvalidState("Graph has no nodes".into()))?
                             .clone()
                     } else {
-                        return Err(Error::InvalidTransition(format!(
-                            "No transition defined from node: {}", current_node
+                        return Err(GraphError::InvalidTransition(format!(
+                            "No transition defined from node: {}",
+                            current_node
                         )));
                     }
                 }
@@ -117,13 +121,13 @@ where
             }
 
             // Get and execute the next node
-            let node = self.nodes.get(&next_node)
-                .ok_or_else(|| Error::NodeNotFound(next_node.clone()))?;
+            let node = self
+                .nodes
+                .get(&next_node)
+                .ok_or_else(|| GraphError::NodeNotFound(next_node.clone()))?;
 
             // Get node config if it exists, or use default
-            let config = self.configs.get(&next_node)
-                .cloned()
-                .unwrap_or_default();
+            let config = self.configs.get(&next_node).cloned().unwrap_or_default();
 
             // Execute node with retry logic
             let mut attempts = 0;
@@ -131,8 +135,10 @@ where
                 attempts += 1;
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(config.timeout),
-                    node.process(ctx, current_state.clone())
-                ).await {
+                    node.process(ctx, current_state.clone()),
+                )
+                .await
+                {
                     Ok(Ok(new_state)) => break Ok(new_state),
                     Ok(Err(_e)) if attempts < config.max_retries => {
                         current_state = current_state;
@@ -143,9 +149,12 @@ where
                         current_state = current_state;
                         continue;
                     }
-                    Err(_) => break Err(Error::ExecutionError(
-                        format!("Node {} timed out after {} attempts", next_node, attempts)
-                    )),
+                    Err(_) => {
+                        break Err(GraphError::ExecutionError(format!(
+                            "Node {} timed out after {} attempts",
+                            next_node, attempts
+                        )))
+                    }
                 }
             }?;
 
@@ -162,7 +171,7 @@ impl<State> Node<State> for Graph<State, Built>
 where
     State: Clone + Send + Sync + Debug + 'static,
 {
-    async fn process(&self, ctx: &Context, state: State) -> Result<State> {
+    async fn process(&self, ctx: &Context, state: State) -> GraphResult<State> {
         // Simply delegate to the run method
         self.run(ctx, state).await
     }
@@ -187,7 +196,8 @@ mod tests {
         // Build graph
         let built_graph = {
             let mut graph = Graph::new("g");
-            graph.add_node(node1)
+            graph
+                .add_node(node1)
                 .add_node(node2)
                 .add_edge("node1", "node2")
                 .add_edge(START, "node1")
@@ -212,12 +222,17 @@ mod tests {
         // Build graph with condition
         let built_graph = {
             let mut graph = Graph::new("g");
-            graph.add_node(node1)
+            graph
+                .add_node(node1)
                 .add_node(node2)
                 .add_edge(START, "node1")
                 .add_edge("node2", END)
                 .add_conditional_edge("node1", |state: &i32| {
-                    if *state < 5 { "node2".into() } else { END.into() }
+                    if *state < 5 {
+                        "node2".into()
+                    } else {
+                        END.into()
+                    }
                 });
             graph.build()
         };

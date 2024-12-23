@@ -2,7 +2,7 @@ use thiserror::Error;
 
 /// Core error types for the graphite library
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum GraphError {
     #[error("node not found: {0}")]
     NodeNotFound(String),
 
@@ -25,4 +25,4 @@ pub enum Error {
     Other(#[from] anyhow::Error),
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type GraphResult<T> = std::result::Result<T, GraphError>;

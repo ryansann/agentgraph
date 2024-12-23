@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-use crate::types::{Error, Result};
-use std::sync::Arc;
+use crate::types::{GraphError, GraphResult};
 use std::any::Any;
+use std::fmt::Debug;
+use std::sync::Arc;
 
 /// Marker types for graph construction states
 #[derive(Debug)]
@@ -25,11 +25,10 @@ pub enum Edge<State> {
 impl<State> std::fmt::Debug for Edge<State> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Edge::Direct(target) => f.debug_tuple("Direct")
-                .field(target)
-                .finish(),
-            Edge::Conditional(_) => f.debug_tuple("Conditional")
-                .field(&"<condition>")  // Placeholder for the function
+            Edge::Direct(target) => f.debug_tuple("Direct").field(target).finish(),
+            Edge::Conditional(_) => f
+                .debug_tuple("Conditional")
+                .field(&"<condition>") // Placeholder for the function
                 .finish(),
         }
     }
@@ -81,7 +80,7 @@ impl NodeConfigBuilder {
 }
 
 pub trait GraphState: Debug + Send + Sync + Any {
-    fn merge(&mut self, other: Box<dyn GraphState>) -> Result<()>;
+    fn merge(&mut self, other: Box<dyn GraphState>) -> GraphResult<()>;
     fn clone_box(&self) -> Box<dyn GraphState>;
 }
 
@@ -89,8 +88,8 @@ impl<T> GraphState for T
 where
     T: 'static + Debug + Send + Sync + Clone,
 {
-    fn merge(&mut self, _other: Box<dyn GraphState>) -> Result<()> {
-        Ok(())  // Default implementation
+    fn merge(&mut self, _other: Box<dyn GraphState>) -> GraphResult<()> {
+        Ok(()) // Default implementation
     }
 
     fn clone_box(&self) -> Box<dyn GraphState> {
@@ -130,11 +129,8 @@ mod tests {
     // Test NodeConfig builder
     #[test]
     fn test_node_config_builder() {
-        let config = NodeConfigBuilder::new()
-            .max_retries(5)
-            .timeout(60)
-            .build();
-        
+        let config = NodeConfigBuilder::new().max_retries(5).timeout(60).build();
+
         assert_eq!(config.max_retries, 5);
         assert_eq!(config.timeout, 60);
     }
@@ -152,10 +148,10 @@ mod tests {
     fn test_graph_state() {
         let mut state = CounterState { count: 0 };
         let other_state = CounterState { count: 5 };
-        
+
         // Test cloning through GraphState trait
         let boxed_state: Box<dyn GraphState> = Box::new(state.clone());
-        
+
         // Test merging
         state.merge(Box::new(other_state)).unwrap();
     }
@@ -183,7 +179,7 @@ mod tests {
     fn test_edge_cloning() {
         let direct_edge: Edge<CounterState> = Edge::Direct("next".to_string());
         let cloned_direct = direct_edge.clone();
-        
+
         match cloned_direct {
             Edge::Direct(target) => assert_eq!(target, "next"),
             _ => panic!("Wrong edge type after cloning"),
@@ -192,7 +188,7 @@ mod tests {
         let condition: Condition<CounterState> = Arc::new(|_| "test".to_string());
         let cond_edge: Edge<CounterState> = Edge::Conditional(condition);
         let cloned_cond = cond_edge.clone();
-        
+
         match cloned_cond {
             Edge::Conditional(c) => assert_eq!(c(&CounterState { count: 0 }), "test"),
             _ => panic!("Wrong edge type after cloning"),
