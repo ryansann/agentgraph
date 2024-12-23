@@ -12,7 +12,9 @@ use std::env;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WeatherParams {
+    #[schemars(description = "Location to check the weather")]
     location: String,
+    #[schemars(description = "Temperature unit (F or C)")]
     unit: String,
 }
 
@@ -26,8 +28,11 @@ pub struct WeatherResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TimeConversionParams {
+    #[schemars(description = "Time to convert")]
     time: String,
+    #[schemars(description = "Time zone to convert from")]
     from_zone: String,
+    #[schemars(description = "Time zone to convert to")]
     to_zone: String,
 }
 
