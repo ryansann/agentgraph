@@ -241,19 +241,53 @@ fn parse_success_type(ty: Type) -> Result<(Type, bool), Error> {
     Ok((ty, false))
 }
 
+/// Capitalize first letter of each word separated by underscores
+fn capitalize(s: &str) -> String {
+    let mut result = String::new();
+    // Split by underscore and capitalize each part
+    for part in s.split('_') {
+        if !part.is_empty() {
+            let mut chars = part.chars();
+            if let Some(first) = chars.next() {
+                // Always capitalize the first letter of each part
+                result.push_str(&first.to_uppercase().collect::<String>());
+                result.push_str(&chars.collect::<String>());
+            }
+        }
+    }
+    result
+}
+
 /// Convert a type to a sanitized string we can embed in an identifier.
 fn type_to_ident_str(ty: &Type) -> String {
     let s = ty.to_token_stream().to_string();
     s.chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>()
+        .split('_')
+        .filter(|s| !s.is_empty())
+        .map(|s| capitalize(s))
         .collect()
 }
 
-/// Capitalize the first letter of a string, e.g. "add" -> "Add"
-fn capitalize(s: &str) -> String {
-    if let Some(first) = s.chars().next() {
-        first.to_uppercase().collect::<String>() + &s[1..]
-    } else {
-        String::new()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn test_capitalize() {
+        assert_eq!(capitalize("get_weather"), "getWeather");
+        assert_eq!(capitalize("convert_time_zone"), "convertTimeZone");
+        assert_eq!(capitalize("handle_user_data"), "handleUserData");
+    }
+
+    #[test]
+    fn test_type_to_ident_str() {
+        let ty: Type = parse_quote!(AssistantTools);
+        assert_eq!(type_to_ident_str(&ty), "AssistantTools");
+        
+        let ty: Type = parse_quote!(my_module::MyType);
+        assert_eq!(type_to_ident_str(&ty), "MyModuleMyType");
     }
 }

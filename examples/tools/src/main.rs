@@ -66,10 +66,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Now we can call the macro-generated trait:
     let add_res = ToolFunction::execute(&add_tool, AddParams { x: 3, y: 4 }).await?;
+    println!("Add name: {}", <MathToolAdd as ToolFunction>::name());
+    println!("Add description: {}", <MathToolAdd as ToolFunction>::description());
     println!("Add result: {}", add_res.sum);
     println!("Add schema: {}", to_string(&add_tool_schema)?);
 
     let sub_res = ToolFunction::execute(&sub_tool, SubParams { a: 7, b: 2}).await?;
+    println!("Subtract name: {}", <MathToolSubtract as ToolFunction>::name());
+    println!("Subtract description: {}", <MathToolSubtract as ToolFunction>::description());
     println!("Subtract result: {}", sub_res.diff);
     println!("Subtract schema: {}", to_string(&sub_tool_schema)?);
 
