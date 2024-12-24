@@ -2,7 +2,7 @@
 mod tests {
     use super::super::state::GraphState;
 
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     struct CounterState {
         count: i32,
     }
