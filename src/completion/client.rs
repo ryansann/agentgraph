@@ -1,24 +1,20 @@
+use crate::{TracingError, TracingProvider};
 use async_openai::{
+    config::OpenAIConfig,
     types::{
-        CreateChatCompletionRequestArgs,
-        CreateChatCompletionRequest,
-        CreateChatCompletionResponse,
+        ChatCompletionRequestMessage, ChatCompletionTool, ChatCompletionToolChoiceOption,
+        CreateChatCompletionRequest, CreateChatCompletionRequestArgs, CreateChatCompletionResponse,
         CreateChatCompletionStreamResponse,
-        ChatCompletionRequestMessage,
-        ChatCompletionTool,
-        ChatCompletionToolChoiceOption,
     },
     Client as OpenAIClient,
-    config::OpenAIConfig,
 };
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use std::sync::Arc;
+use serde_json::{json, Value};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::SystemTime;
 use uuid::Uuid;
-use serde_json::{json, Value};
-use crate::{TracingProvider, TracingError};
 
 #[derive(Debug, Clone)]
 pub struct ChatCompletionRequestOptions {
@@ -75,8 +71,17 @@ pub trait ChatClient: Send + Sync {
         request: CreateChatCompletionRequest,
         options: Option<ChatCompletionCallOptions>,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
-        Box<dyn std::error::Error + Send + Sync>
+        Pin<
+            Box<
+                dyn Stream<
+                        Item = Result<
+                            CreateChatCompletionStreamResponse,
+                            Box<dyn std::error::Error + Send + Sync>,
+                        >,
+                    > + Send,
+            >,
+        >,
+        Box<dyn std::error::Error + Send + Sync>,
     >;
 }
 
@@ -89,7 +94,7 @@ impl ChatClientImpl {
     pub fn new(api_key: String) -> Self {
         let config = OpenAIConfig::new().with_api_key(api_key);
         let client = OpenAIClient::with_config(config);
-        Self { 
+        Self {
             client,
             tracer: None,
         }
@@ -126,7 +131,7 @@ impl ChatClientImpl {
         } else {
             builder
         };
-        
+
         builder.to_owned()
     }
 }
@@ -138,7 +143,8 @@ impl ChatClient for ChatClientImpl {
         messages: Vec<ChatCompletionRequestMessage>,
         options: ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.create_base_request(messages, options)
+        Ok(self
+            .create_base_request(messages, options)
             .stream(false)
             .build()?
             .into())
@@ -149,7 +155,8 @@ impl ChatClient for ChatClientImpl {
         messages: Vec<ChatCompletionRequestMessage>,
         options: ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.create_base_request(messages, options)
+        Ok(self
+            .create_base_request(messages, options)
             .stream(true)
             .build()?
             .into())
@@ -193,11 +200,7 @@ impl ChatClient for ChatClientImpl {
                 .unwrap_or_else(|_| json!({ "error": "Failed to serialize response" }));
 
             tracer
-                .end_trace(
-                    trace_id,
-                    &outputs,
-                    Some(SystemTime::now()),
-                )
+                .end_trace(trace_id, &outputs, Some(SystemTime::now()))
                 .await?;
         }
 
@@ -209,8 +212,17 @@ impl ChatClient for ChatClientImpl {
         request: CreateChatCompletionRequest,
         options: Option<ChatCompletionCallOptions>,
     ) -> Result<
-        Pin<Box<dyn futures::Stream<Item = Result<CreateChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
-        Box<dyn std::error::Error + Send + Sync>
+        Pin<
+            Box<
+                dyn futures::Stream<
+                        Item = Result<
+                            CreateChatCompletionStreamResponse,
+                            Box<dyn std::error::Error + Send + Sync>,
+                        >,
+                    > + Send,
+            >,
+        >,
+        Box<dyn std::error::Error + Send + Sync>,
     > {
         let trace_id = options
             .as_ref()

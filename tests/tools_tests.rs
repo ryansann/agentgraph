@@ -1,7 +1,7 @@
 use agentgraph::prelude::*;
 use agentgraph_macros::tools;
-use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Simple data for add-params
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,11 +87,15 @@ struct MathTool;
 #[tools(add = "Adds two numbers", subtract = "Subtracts second from first")]
 impl MathTool {
     async fn add(&self, params: AddParams) -> std::result::Result<AddResponse, ToolError> {
-        Ok(AddResponse { sum: params.x + params.y })
+        Ok(AddResponse {
+            sum: params.x + params.y,
+        })
     }
 
     async fn subtract(&self, params: SubParams) -> std::result::Result<SubResponse, ToolError> {
-        Ok(SubResponse { diff: params.a - params.b })
+        Ok(SubResponse {
+            diff: params.a - params.b,
+        })
     }
 
     // Some other methods might be ignored, as they're not in the attribute list
@@ -113,9 +117,14 @@ async fn test_add_tool_execution() {
 
     // Confirm that name/description are as we specified
     assert_eq!(<MathToolAdd as ToolFunction>::name(), "add");
-    assert_eq!(<MathToolAdd as ToolFunction>::description(), "Adds two numbers");
+    assert_eq!(
+        <MathToolAdd as ToolFunction>::description(),
+        "Adds two numbers"
+    );
 
-    let result = ToolFunction::execute(&tool, AddParams { x: 7, y: 3 }).await.unwrap();
+    let result = ToolFunction::execute(&tool, AddParams { x: 7, y: 3 })
+        .await
+        .unwrap();
     assert_eq!(result.sum, 10);
 }
 
@@ -126,7 +135,10 @@ fn test_add_tool_schema() {
 
     // Check top-level metadata
     assert_eq!(schema.function.name, "add");
-    assert_eq!(schema.function.description.as_ref().unwrap(), "Adds two numbers");
+    assert_eq!(
+        schema.function.description.as_ref().unwrap(),
+        "Adds two numbers"
+    );
 
     // Check parameter schema
     let params = schema.function.parameters.as_ref().unwrap();
@@ -149,9 +161,14 @@ async fn test_subtract_tool_execution() {
     let tool = MathToolSubtract(MathTool);
 
     assert_eq!(<MathToolSubtract as ToolFunction>::name(), "subtract");
-    assert_eq!(<MathToolSubtract as ToolFunction>::description(), "Subtracts second from first");
+    assert_eq!(
+        <MathToolSubtract as ToolFunction>::description(),
+        "Subtracts second from first"
+    );
 
-    let result = ToolFunction::execute(&tool, SubParams { a: 10, b: 3 }).await.unwrap();
+    let result = ToolFunction::execute(&tool, SubParams { a: 10, b: 3 })
+        .await
+        .unwrap();
     assert_eq!(result.diff, 7);
 }
 
@@ -159,7 +176,10 @@ async fn test_subtract_tool_execution() {
 fn test_subtract_tool_schema() {
     let schema = <MathToolSubtract as ToolFunction>::get_schema();
     assert_eq!(schema.function.name, "subtract");
-    assert_eq!(schema.function.description.as_ref().unwrap(), "Subtracts second from first");
+    assert_eq!(
+        schema.function.description.as_ref().unwrap(),
+        "Subtracts second from first"
+    );
 
     let params = schema.function.parameters.as_ref().unwrap();
     assert_eq!(

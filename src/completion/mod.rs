@@ -2,13 +2,6 @@ mod client;
 mod tracing;
 
 pub use client::{
-    ChatClient,
-    ChatClientImpl,
-    ChatCompletionRequestOptions,
-    ChatCompletionCallOptions,
+    ChatClient, ChatClientImpl, ChatCompletionCallOptions, ChatCompletionRequestOptions,
 };
-pub use tracing::{
-    TracingProvider,
-    TracingError,
-    LangSmithTracer,
-};
+pub use tracing::{LangSmithTracer, TracingError, TracingProvider};

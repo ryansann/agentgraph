@@ -1,0 +1,20 @@
+#[cfg(test)]
+mod tests {
+    use super::super::state::GraphState;
+
+    #[derive(Clone)]
+    struct CounterState {
+        count: i32,
+    }
+
+    fn test_graph_state() {
+        let mut state = CounterState { count: 0 };
+        let other_state = CounterState { count: 5 };
+
+        // Test cloning through GraphState trait
+        let boxed_state: Box<dyn GraphState> = Box::new(state.clone());
+
+        // Test merging
+        state.merge(Box::new(other_state)).unwrap();
+    }
+}

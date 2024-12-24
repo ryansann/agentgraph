@@ -2,6 +2,7 @@
 
 pub mod completion;
 pub mod graph;
+pub mod node;
 pub mod tool;
 pub mod types;
 
@@ -11,7 +12,8 @@ pub mod prelude {
         ChatClient, ChatClientImpl, ChatCompletionCallOptions, ChatCompletionRequestOptions,
         LangSmithTracer, TracingError, TracingProvider,
     };
-    pub use crate::graph::{Context, FunctionNode, Graph, Node, END, START};
+    pub use crate::graph::{Graph, END, START};
+    pub use crate::node::{Context, FunctionNode, Node};
     pub use crate::tool::{JsonSchema, ToolError, ToolFunction};
     pub use crate::types::{GraphError, GraphResult};
 }

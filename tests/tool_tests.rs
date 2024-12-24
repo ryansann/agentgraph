@@ -1,7 +1,7 @@
 use agentgraph::prelude::*;
 use agentgraph_macros::tool;
-use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AddParams {
@@ -44,14 +44,16 @@ struct Add;
 
 #[tool("Adds two numbers together")]
 async fn add(_tool: &Add, params: AddParams) -> std::result::Result<AddResponse, ToolError> {
-    Ok(AddResponse { sum: params.x + params.y })
+    Ok(AddResponse {
+        sum: params.x + params.y,
+    })
 }
 
 #[tokio::test]
 async fn test_tool_execution() {
     let tool = Add;
     let params = AddParams { x: 5, y: 3 };
-    
+
     let result = ToolFunction::execute(&tool, params).await.unwrap();
     assert_eq!(result.sum, 8);
 }
@@ -59,11 +61,14 @@ async fn test_tool_execution() {
 #[test]
 fn test_tool_schema() {
     let schema = <Add as ToolFunction>::get_schema();
-    
+
     // Check function metadata
     assert_eq!(schema.function.name, "add");
-    assert_eq!(schema.function.description.unwrap(), "Adds two numbers together");
-    
+    assert_eq!(
+        schema.function.description.unwrap(),
+        "Adds two numbers together"
+    );
+
     // Check parameters schema
     let params = schema.function.parameters.unwrap();
     assert_eq!(
@@ -123,13 +128,16 @@ impl JsonSchema for OptionalResponse {
 struct HandleOptional;
 
 #[tool("A tool with optional parameters")]
-async fn handle_optional(_tool: &HandleOptional, params: OptionalParams) 
-    -> std::result::Result<OptionalResponse, ToolError> 
-{
+async fn handle_optional(
+    _tool: &HandleOptional,
+    params: OptionalParams,
+) -> std::result::Result<OptionalResponse, ToolError> {
     let result = format!(
         "Required: {}, Optional: {}",
         params.required,
-        params.optional.map_or("None".to_string(), |n| n.to_string())
+        params
+            .optional
+            .map_or("None".to_string(), |n| n.to_string())
     );
     Ok(OptionalResponse { result })
 }
@@ -137,7 +145,7 @@ async fn handle_optional(_tool: &HandleOptional, params: OptionalParams)
 #[tokio::test]
 async fn test_optional_parameters() {
     let tool = HandleOptional;
-    
+
     // Test with all parameters
     let params = OptionalParams {
         required: "test".to_string(),
@@ -145,7 +153,7 @@ async fn test_optional_parameters() {
     };
     let result = ToolFunction::execute(&tool, params).await.unwrap();
     assert_eq!(result.result, "Required: test, Optional: 42");
-    
+
     // Test with only required parameters
     let params = OptionalParams {
         required: "test".to_string(),
@@ -159,7 +167,7 @@ async fn test_optional_parameters() {
 fn test_optional_schema() {
     let schema = <HandleOptional as ToolFunction>::get_schema();
     let params = schema.function.parameters.unwrap();
-    
+
     // Check that optional parameter is marked as not required
     let properties = params.get("properties").unwrap();
     let optional = properties.get("optional").unwrap();

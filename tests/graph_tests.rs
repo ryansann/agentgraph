@@ -1,14 +1,12 @@
 use agentgraph::prelude::*;
+use async_openai::types::{
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
+    ChatCompletionRequestUserMessageContent,
+};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use async_openai::types::{
-    ChatCompletionRequestMessage,
-    ChatCompletionRequestUserMessageArgs,
-    ChatCompletionRequestAssistantMessageArgs,
-    ChatCompletionRequestUserMessageContent,
-    ChatCompletionRequestAssistantMessageContent,
-};
 
 // Custom test state
 #[derive(Debug, Clone)]
@@ -60,7 +58,8 @@ async fn test_basic_counter_flow() {
 
     let built_graph = {
         let mut graph = Graph::new("g");
-        graph.add_node(increment_node)
+        graph
+            .add_node(increment_node)
             .add_node(double_node)
             .add_edge(START, "increment")
             .add_edge("increment", "double")
@@ -92,7 +91,8 @@ async fn test_conditional_routing() {
 
     let built_graph = {
         let mut graph = Graph::new("g");
-        graph.add_node(even_node)
+        graph
+            .add_node(even_node)
             .add_node(odd_node)
             .add_edge(START, "even")
             .add_conditional_edge("even", |state: &CounterState| {
@@ -139,7 +139,8 @@ impl ChatState {
             .content(content)
             .build()
             .map_err(|e| GraphError::Other(e.into()))?;
-        self.messages.push(ChatCompletionRequestMessage::User(message));
+        self.messages
+            .push(ChatCompletionRequestMessage::User(message));
         Ok(())
     }
 
@@ -149,7 +150,8 @@ impl ChatState {
             .content(content)
             .build()
             .map_err(|e| GraphError::Other(e.into()))?;
-        self.messages.push(ChatCompletionRequestMessage::Assistant(message));
+        self.messages
+            .push(ChatCompletionRequestMessage::Assistant(message));
         Ok(())
     }
 }
@@ -163,7 +165,9 @@ async fn test_chat_flow() {
                     let content = match &msg.content {
                         ChatCompletionRequestUserMessageContent::Text(text) => text.clone(),
                         ChatCompletionRequestUserMessageContent::Array(_) => {
-                            return Err(GraphError::ExecutionError("Array content not supported".into()));
+                            return Err(GraphError::ExecutionError(
+                                "Array content not supported".into(),
+                            ));
                         }
                     };
                     let response = format!("Processed: {}", content);
@@ -177,7 +181,8 @@ async fn test_chat_flow() {
 
     let built_graph = {
         let mut graph = Graph::new("g");
-        graph.add_node(process_node)
+        graph
+            .add_node(process_node)
             .add_edge(START, "process")
             .add_edge("process", END);
         graph.build()
@@ -188,7 +193,7 @@ async fn test_chat_flow() {
     initial_state.add_user_message("Test message").unwrap();
 
     let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
-    
+
     assert_eq!(final_state.messages.len(), 2);
     if let ChatCompletionRequestMessage::Assistant(msg) = &final_state.messages[1] {
         if let Some(ChatCompletionRequestAssistantMessageContent::Text(content)) = &msg.content {
@@ -213,7 +218,7 @@ impl Node<CounterState> for FlakyNode {
     async fn process(&self, _ctx: &Context, state: CounterState) -> GraphResult<CounterState> {
         let mut attempts = self.attempts.lock().await;
         *attempts += 1;
-        
+
         if *attempts <= self.max_failures {
             Err(GraphError::ExecutionError("Temporary failure".into()))
         } else {
@@ -236,7 +241,8 @@ async fn test_retry_behavior() {
 
     let built_graph = {
         let mut graph = Graph::new("g");
-        graph.add_node(flaky_node)
+        graph
+            .add_node(flaky_node)
             .add_edge(START, "flaky")
             .add_edge("flaky", END);
         graph.build()
@@ -251,14 +257,13 @@ async fn test_retry_behavior() {
 }
 
 // Helper function to create test nodes
-fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState + Send + Sync + Clone + 'static) 
-    -> impl Node<CounterState> 
-{
+fn create_test_node(
+    name: &str,
+    operation: impl Fn(CounterState) -> CounterState + Send + Sync + Clone + 'static,
+) -> impl Node<CounterState> {
     FunctionNode::new(name, move |_ctx, state| {
         let op = operation.clone();
-        async move {
-            Ok(op(state))
-        }
+        async move { Ok(op(state)) }
     })
 }
 
@@ -266,7 +271,8 @@ fn create_test_node(name: &str, operation: impl Fn(CounterState) -> CounterState
 async fn test_complex_workflow() {
     let built_graph = {
         let mut graph = Graph::new("g");
-        graph.add_node(create_test_node("step1", |mut state| {
+        graph
+            .add_node(create_test_node("step1", |mut state| {
                 state.count += 1;
                 state.record_operation("step1");
                 state
@@ -283,7 +289,11 @@ async fn test_complex_workflow() {
             }))
             .add_edge(START, "step1")
             .add_conditional_edge("step1", move |state: &CounterState| {
-                if state.count > 0 { "step2".to_string() } else { "step3".to_string() }
+                if state.count > 0 {
+                    "step2".to_string()
+                } else {
+                    "step3".to_string()
+                }
             })
             .add_edge("step2", "step3")
             .add_edge("step3", END);

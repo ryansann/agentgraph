@@ -44,11 +44,10 @@ pub trait TracingProvider: Send + Sync {
     ) -> Result<(), TracingError>;
 }
 
-
 /// An example implementer that communicates with the LangSmith API.
 pub struct LangSmithTracer {
-    pub base_url: String,   // e.g. "https://api.smith.langchain.com"
-    pub api_key: String,    // "x-api-key" header
+    pub base_url: String, // e.g. "https://api.smith.langchain.com"
+    pub api_key: String,  // "x-api-key" header
     pub http_client: Client,
 }
 
@@ -102,8 +101,8 @@ impl TracingProvider for LangSmithTracer {
             Some(t) => t,
             None => SystemTime::now(),
         };
-        let start_time_str = DateTime::<Utc>::from(start_time)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let start_time_str =
+            DateTime::<Utc>::from(start_time).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let body = StartRunBody {
             id: trace_id.to_string(),
@@ -149,8 +148,8 @@ impl TracingProvider for LangSmithTracer {
             Some(t) => t,
             None => SystemTime::now(),
         };
-        let end_time_str = DateTime::<Utc>::from(end_time)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let end_time_str =
+            DateTime::<Utc>::from(end_time).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let body = EndRunBody {
             outputs: outputs.clone(),
