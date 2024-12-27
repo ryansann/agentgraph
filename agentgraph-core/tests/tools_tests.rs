@@ -1,6 +1,5 @@
-use agentgraph::prelude::*;
+use agentgraph_core::prelude::*;
 use agentgraph_macros::tools;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 /// Simple data for add-params

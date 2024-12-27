@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "agentgraph-core",
-    "agentgraph-macros"
+    "agentgraph-macros",
 ]

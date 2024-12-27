@@ -1,4 +1,4 @@
-use agentgraph::prelude::*;
+use agentgraph_core::prelude::*;
 use async_openai::types::{
     ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestAssistantMessageContent,
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,

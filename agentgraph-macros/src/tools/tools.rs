@@ -1,15 +1,11 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as Pm2TokenStream;
 use proc_macro::TokenStream as PmTokenStream;
+use proc_macro2::TokenStream as Pm2TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse_macro_input,
-    parse::Parse, parse::ParseStream,
-    token::Comma, 
-    punctuated::Punctuated,
-    Error, Expr, ExprLit, FnArg, ImplItem, Item, ItemImpl, ImplItemFn, Lit, MetaNameValue,
-    ReturnType, Type,
-    Result as SynResult,
+    parse::Parse, parse::ParseStream, parse_macro_input, punctuated::Punctuated, token::Comma,
+    Error, Expr, ExprLit, FnArg, ImplItem, ImplItemFn, Item, ItemImpl, Lit, MetaNameValue,
+    Result as SynResult, ReturnType, Type,
 };
 
 /// A simple wrapper that can parse comma-separated `MetaNameValue` items.
@@ -30,9 +26,9 @@ impl Parse for ToolsAttribute {
 }
 
 /// Entry point for the `#[tools(...)]` attribute macro.
-/// 
+///
 /// Usage example:
-/// ```
+/// ```ignore
 /// #[tools(add = "Adds two numbers", subtract = "Subtracts b from a")]
 /// impl MathTool {
 ///     async fn add(&self, params: AddParams) -> Result<AddResponse, ToolError> { ... }
@@ -82,7 +78,11 @@ pub fn tools_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         let struct_name = syn::Ident::new(
-            &format!("{}{}", type_to_ident_str(tool_type), capitalize(&method_name)),
+            &format!(
+                "{}{}",
+                type_to_ident_str(tool_type),
+                capitalize(&method_name)
+            ),
             method_fn.sig.ident.span(),
         );
         let method_ident = &method_fn.sig.ident;
@@ -193,7 +193,7 @@ fn parse_param_and_return(m: &ImplItemFn) -> Result<(Type, Type, bool), Error> {
     let params_ty = found_param_ty.ok_or_else(|| {
         Error::new_spanned(
             m,
-            "Method must have a typed parameter, e.g. `fn foo(&self, params: X) -> ...`"
+            "Method must have a typed parameter, e.g. `fn foo(&self, params: X) -> ...`",
         )
     })?;
 
@@ -228,7 +228,8 @@ fn parse_success_type(ty: Type) -> Result<(Type, bool), Error> {
                     let second_arg = args_iter.next();
 
                     // Expect `Result<SuccessType, ToolError>` shape
-                    if let (Some(syn::GenericArgument::Type(success)), Some(_)) = (first_arg, second_arg)
+                    if let (Some(syn::GenericArgument::Type(success)), Some(_)) =
+                        (first_arg, second_arg)
                     {
                         // success is T
                         return Ok((success.clone(), true));
@@ -277,16 +278,16 @@ mod tests {
 
     #[test]
     fn test_capitalize() {
-        assert_eq!(capitalize("get_weather"), "getWeather");
-        assert_eq!(capitalize("convert_time_zone"), "convertTimeZone");
-        assert_eq!(capitalize("handle_user_data"), "handleUserData");
+        assert_eq!(capitalize("get_weather"), "GetWeather");
+        assert_eq!(capitalize("convert_time_zone"), "ConvertTimeZone");
+        assert_eq!(capitalize("handle_user_data"), "HandleUserData");
     }
 
     #[test]
     fn test_type_to_ident_str() {
         let ty: Type = parse_quote!(AssistantTools);
         assert_eq!(type_to_ident_str(&ty), "AssistantTools");
-        
+
         let ty: Type = parse_quote!(my_module::MyType);
         assert_eq!(type_to_ident_str(&ty), "MyModuleMyType");
     }

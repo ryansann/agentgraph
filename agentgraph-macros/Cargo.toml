@@ -1,4 +1,3 @@
-# agentgraph-macros/Cargo.toml
 [package]
 name = "agentgraph-macros"
 version = "0.1.0"
