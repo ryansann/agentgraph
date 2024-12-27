@@ -6,7 +6,7 @@ use async_openai::types::{
     CreateChatCompletionRequestArgs,
 };
 
-use agentgraph::{
+use agentgraph_core::{
     ChatClient,
     ChatClientImpl,
     ChatCompletionRequestOptions,

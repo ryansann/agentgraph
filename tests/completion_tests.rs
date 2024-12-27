@@ -1,5 +1,5 @@
 // tests/chat_client.rs
-use agentgraph::completion::*;
+use agentgraph_core::completion::*;
 use async_openai::types::{
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequest, CreateChatCompletionResponse,

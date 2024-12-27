@@ -1,6 +1,5 @@
-use agentgraph::prelude::*;
+use agentgraph_core::prelude::*;
 use agentgraph_macros::tool;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use super::super::state::GraphState;
+    use crate::*;
+    use agentgraph_macros::State;
 
-    #[derive(Debug, Clone)]
+    #[derive(State, Debug, Clone)]
     struct CounterState {
         count: i32,
     }

@@ -1,5 +1,8 @@
 //! AgentGraph is a framework for building stateful, multi-actor applications with LLMs.
 
+#![allow(unused_extern_crates)]
+extern crate self as agentgraph_core;
+
 pub mod completion;
 pub mod graph;
 pub mod node;
@@ -15,7 +18,7 @@ pub mod prelude {
     pub use crate::graph::{Graph, END, START};
     pub use crate::node::{Context, FunctionNode, Node};
     pub use crate::tool::{JsonSchema, ToolError, ToolFunction};
-    pub use crate::types::{GraphError, GraphResult};
+    pub use crate::types::{GraphError, GraphResult, GraphState, UpdateableState};
 }
 
 // Re-export main types

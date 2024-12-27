@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
-    parse_macro_input, spanned::Spanned, Error, FnArg, ItemFn, LitStr, PatType, ReturnType, Type,
-    TypePath, PathArguments, GenericArgument, Receiver,
+    parse_macro_input, spanned::Spanned, Error, FnArg, GenericArgument, ItemFn, LitStr, PatType,
+    PathArguments, Receiver, ReturnType, Type, TypePath,
 };
 
 pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -19,14 +19,20 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     for arg in &input_fn.sig.inputs {
         match arg {
-            FnArg::Receiver(Receiver { reference: Some(_), mutability: None, .. }) => {
+            FnArg::Receiver(Receiver {
+                reference: Some(_),
+                mutability: None,
+                ..
+            }) => {
                 has_receiver = true;
             }
             FnArg::Receiver(_) => {
                 return Error::new(
                     arg.span(),
                     "Tool methods must take &self (not mut or owned self)",
-                ).to_compile_error().into();
+                )
+                .to_compile_error()
+                .into();
             }
             FnArg::Typed(pat_type) => {
                 if !has_receiver && tool_type.is_none() {
@@ -38,7 +44,9 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                             return Error::new(
                                 pat_type.ty.span(),
                                 "First argument must be a reference type",
-                            ).to_compile_error().into();
+                            )
+                            .to_compile_error()
+                            .into();
                         }
                     }
                 } else {
@@ -50,10 +58,9 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     // Get the parameters type
-    let params_type = params_type.ok_or_else(|| Error::new(
-        input_fn.span(),
-        "Missing params argument",
-    )).unwrap();
+    let params_type = params_type
+        .ok_or_else(|| Error::new(input_fn.span(), "Missing params argument"))
+        .unwrap();
 
     // Get the return type
     let return_type = match &input_fn.sig.output {
@@ -61,7 +68,9 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             return Error::new(
                 input_fn.sig.output.span(),
                 "Tool function must return a concrete type or Result<T, E>.",
-            ).to_compile_error().into();
+            )
+            .to_compile_error()
+            .into();
         }
         ReturnType::Type(_, ty) => (*ty).clone(),
     };
@@ -94,7 +103,7 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     #description
                 }
 
-                async fn execute(&self, params: Self::Params) 
+                async fn execute(&self, params: Self::Params)
                     -> std::result::Result<Self::Response, ToolError>
                 {
                     Ok(#fn_name(params).await?)
@@ -120,7 +129,7 @@ pub fn tool_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                     #description
                 }
 
-                async fn execute(&self, params: Self::Params) 
+                async fn execute(&self, params: Self::Params)
                     -> std::result::Result<Self::Response, ToolError>
                 {
                     Ok(#fn_name(self, params).await?)
@@ -153,11 +162,9 @@ fn parse_success_type(ty: Type) -> (Type, bool) {
 }
 // Helper functions
 fn extract_param_type(input_fn: &ItemFn) -> Option<Type> {
-    let mut param_types = input_fn.sig.inputs.iter().filter_map(|arg| {
-        match arg {
-            FnArg::Typed(PatType { ty, .. }) => Some((**ty).clone()),
-            FnArg::Receiver(_) => None,
-        }
+    let mut param_types = input_fn.sig.inputs.iter().filter_map(|arg| match arg {
+        FnArg::Typed(PatType { ty, .. }) => Some((**ty).clone()),
+        FnArg::Receiver(_) => None,
     });
 
     param_types.next()
@@ -185,24 +192,24 @@ mod tests {
 
         let param_type = extract_param_type(&input);
         assert!(param_type.is_some());
-        
+
         // Test with no params
         let input_no_params: ItemFn = parse_quote! {
             async fn test_fn() -> TestResponse {
                 unimplemented!()
             }
         };
-        
+
         let param_type = extract_param_type(&input_no_params);
         assert!(param_type.is_none());
-        
+
         // Test with self param
         let input_with_self: ItemFn = parse_quote! {
             async fn test_fn(&self, params: TestParams) -> TestResponse {
                 unimplemented!()
             }
         };
-        
+
         let param_type = extract_param_type(&input_with_self);
         let param_type_str = param_type.unwrap().to_token_stream().to_string();
         assert_eq!(param_type_str, "TestParams");
@@ -241,7 +248,7 @@ mod tests {
         let return_type = extract_return_type(&input_no_return);
         assert!(return_type.is_none());
     }
-    
+
     // Helper function to normalize whitespace in strings
     fn normalize_ws(s: &str) -> String {
         s.split_whitespace().collect::<Vec<_>>().join(" ")

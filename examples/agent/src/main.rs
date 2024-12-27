@@ -1,4 +1,4 @@
-use agentgraph::prelude::*;
+use agentgraph_core::prelude::*;
 use agentgraph_macros::tools;
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
@@ -64,10 +64,6 @@ impl SearchAgentState {
         }
     }
 
-    pub fn add_message(&mut self, message: ChatCompletionRequestMessage) {
-        self.messages.push(message);
-    }
-
     pub fn get_latest_messages(&self) -> Vec<ChatCompletionRequestMessage> {
         let mut result = Vec::new();
 
@@ -92,9 +88,6 @@ impl SearchAgentState {
         result
     }
 
-    pub fn add_error(&mut self, error: String) {
-        self.errors.push(error);
-    }
 }
 
 pub struct SearchAgent {
@@ -132,23 +125,14 @@ impl SearchAgent {
         graph
     }
 
-    pub async fn execute_search(
-        &self,
-        query: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Create the messages
-        let messages = vec![
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant that can search the web for information.")
-                .build()?
-                .into(),
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(query)
-                .build()?
-                .into(),
-        ];
+}
 
-        // Get the search tool schema
+impl Node<SearchAgentState> for SearchAgent {
+    async fn process(
+        &self,
+        ctx: &Context,
+        state: SearchAgentState,
+    ) -> GraphResult<SearchAgentState> {
         let search_schema = <SearchToolsWebSearch as ToolFunction>::get_schema();
         let tools = vec![search_schema];
 
