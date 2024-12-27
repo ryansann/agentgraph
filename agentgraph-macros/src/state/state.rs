@@ -1,9 +1,9 @@
+use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
-#[proc_macro_derive(State, attributes(update))]
-pub fn derive_state(input: TokenStream) -> TokenStream {
+pub fn derive_state_impl(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let update_name = format_ident!("{}Update", name);
@@ -33,7 +33,7 @@ pub fn derive_state(input: TokenStream) -> TokenStream {
             .map(|attr| attr.parse_args::<syn::Ident>().unwrap())
             .unwrap_or_else(|| syn::Ident::new("replace", proc_macro2::Span::call_site()));
 
-        let variant_name = format_ident!("{}", field_name.to_string().to_pascal_case());
+        let variant_name = format_ident!("{}", field_name.to_string().to_case(Case::Pascal));
         update_variants.push(quote! {
             #variant_name(#field_type)
         });

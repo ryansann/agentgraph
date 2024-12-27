@@ -24,5 +24,3 @@ pub enum GraphError {
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
-
-pub type GraphResult<T> = std::result::Result<T, GraphError>;

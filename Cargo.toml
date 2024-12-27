@@ -35,10 +35,6 @@ tokio-test = "0.4"
 criterion = "0.5"
 mockall = "0.11"
 
-[[bench]]
-name = "graph_bench"
-harness = false
-
 [features]
 default = []
 persistence = ["tokio/fs"]

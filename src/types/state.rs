@@ -1,4 +1,4 @@
-use super::error::GraphResult;
+use super::result::GraphResult;
 use std::any::Any;
 use std::fmt::Debug;
 
