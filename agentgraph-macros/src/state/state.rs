@@ -59,7 +59,7 @@ pub fn derive_state_impl(input: TokenStream) -> TokenStream {
         impl ::agentgraph_core::UpdateableState for #name {
             type Update = #update_name;
 
-            fn update(&mut self, update: Self::Update) {
+            fn apply(&mut self, update: Self::Update) {
                 match update {
                     #(#update_match_arms),*
                 }

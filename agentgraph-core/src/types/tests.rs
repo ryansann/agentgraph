@@ -5,17 +5,39 @@ mod tests {
 
     #[derive(State, Debug, Clone)]
     struct CounterState {
+        #[update(replace)]
         count: i32,
+
+        #[update(append)]
+        operations: Vec<String>,
     }
 
-    fn test_graph_state() {
-        let mut state = CounterState { count: 0 };
-        let other_state = CounterState { count: 5 };
+    impl Default for CounterState {
+        fn default() -> Self {
+            CounterState {
+                count: 0,
+                operations: vec![],
+            }
+        }
+    }
 
-        // Test cloning through GraphState trait
-        let boxed_state: Box<dyn GraphState> = Box::new(state.clone());
+    #[test]
+    fn test_counter_state_replace() {
+        // The macro expanded to an impl of UpdateableState for CounterState
+        let mut state = CounterState::default();
+        state.apply(CounterStateUpdate::Count(5));
+        assert_eq!(state.count, 5);
+    }
 
-        // Test merging
-        state.merge(Box::new(other_state)).unwrap();
+    #[test]
+    fn test_counter_state_append() {
+        let mut state = CounterState::default();
+        state.apply(CounterStateUpdate::Operations(
+            vec!["increment".to_string()],
+        ));
+        state.apply(CounterStateUpdate::Operations(
+            vec!["decrement".to_string()],
+        ));
+        assert_eq!(state.operations, vec!["increment", "decrement"]);
     }
 }
