@@ -93,7 +93,10 @@ where
             // Get next node based on edges
             let next_node = match self.edges.get(&current_node) {
                 Some(Edge::Direct(next)) => next.clone(),
-                Some(Edge::Conditional(condition)) => condition(&current_state),
+                Some(Edge::Conditional(condition)) => {
+                    let current_state_ref = &current_state;
+                    condition(current_state_ref)
+                }
                 None => {
                     if current_node == START {
                         // If we're at START with no edge, try to find a default starting node
@@ -132,7 +135,7 @@ where
                 // Node::process returns NodeResult<S::Update> = Result<Vec<S::Update>, NodeError>
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(config.timeout),
-                    node.process(ctx, current_state),
+                    node.process(ctx, current_state.clone()),
                 )
                 .await
                 {
@@ -164,14 +167,14 @@ where
             }?;
 
             // Now apply each update to our state
-            match updates {
-                NodeOutput::Full(new_state) => {
-                    current_state = new_state;
-                }
+            current_state = match updates {
+                NodeOutput::Full(new_state) => new_state,
                 NodeOutput::Updates(updates) => {
-                    current_state.apply_many(updates);
+                    let mut new_state = current_state.clone();
+                    new_state.apply_many(updates);
+                    new_state
                 }
-            }
+            };
 
             // Move on
             current_node = next_node;

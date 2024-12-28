@@ -64,8 +64,8 @@ mod tests {
         let built_graph = {
             let mut graph = Graph::new("g");
             graph
-                .add_node(create_add_1_node())
-                .add_node(create_multiply_2_node())
+                .add_node(node1)
+                .add_node(node2)
                 .add_edge(START, "node1")
                 .add_edge("node2", END)
                 .add_conditional_edge("node1", |state: &CounterState| {

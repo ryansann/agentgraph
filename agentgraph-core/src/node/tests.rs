@@ -11,7 +11,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_function_node() {
-        let node = FunctionNode::new("test", |_ctx, state: TestState| async move {
+        let node = FunctionNode::new("test", |_ctx, _: TestState| async move {
             Ok(NodeOutput::Full(TestState {
                 name: "Ryan".to_string(),
             }))
@@ -21,7 +21,7 @@ mod tests {
         let result = node
             .process(
                 &ctx,
-                &TestState {
+                TestState {
                     name: "test".to_string(),
                 },
             )

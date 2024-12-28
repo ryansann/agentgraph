@@ -1,6 +1,5 @@
 use crate::node::Context;
 use crate::node::Node;
-use crate::types::GraphResult;
 use crate::types::{GraphState, NodeResult};
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -19,7 +18,7 @@ impl<S, F, Fut> FunctionNode<S, F>
 where
     S: Debug + Send + Sync + GraphState,
     F: Fn(&Context, S) -> Fut + Send + Sync,
-    Fut: Future<Output = GraphResult<S>> + Send,
+    Fut: Future<Output = NodeResult<S>> + Send,
 {
     pub fn new(name: impl Into<String>, f: F) -> Self {
         Self {

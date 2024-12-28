@@ -1,4 +1,5 @@
 use agentgraph_core::prelude::*;
+use agentgraph_macros::State;
 use async_openai::types::{
     ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestAssistantMessageContent,
     ChatCompletionRequestMessage, ChatCompletionRequestUserMessageArgs,
@@ -9,9 +10,12 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 // Custom test state
-#[derive(Debug, Clone)]
+#[derive(State, Debug, Clone)]
 struct CounterState {
+    #[update(replace)]
     count: i32,
+
+    #[update(append)]
     history: Vec<String>,
 }
 
@@ -36,10 +40,12 @@ struct IncrementNode {
 
 #[async_trait]
 impl Node<CounterState> for IncrementNode {
-    async fn process(&self, _ctx: &Context, mut state: CounterState) -> GraphResult<CounterState> {
-        state.count += self.amount;
-        state.record_operation(&format!("increment_{}", self.amount));
-        Ok(state)
+    async fn process(&self, _ctx: &Context, state: CounterState) -> NodeResult<CounterState> {
+        let updates = vec![
+            CounterStateUpdate::Count(state.count + self.amount),
+            CounterStateUpdate::History(vec![format!("increment_{}", self.amount)]),
+        ];
+        Ok(NodeOutput::Updates(updates))
     }
 
     fn name(&self) -> &str {
@@ -50,10 +56,12 @@ impl Node<CounterState> for IncrementNode {
 #[tokio::test]
 async fn test_basic_counter_flow() {
     let increment_node = IncrementNode { amount: 5 };
-    let double_node = FunctionNode::new("double", |_ctx, mut state: CounterState| async move {
-        state.count *= 2;
-        state.record_operation("double");
-        Ok(state)
+    let double_node = FunctionNode::new("double", |_ctx, state: CounterState| async move {
+        let updates = vec![
+            CounterStateUpdate::Count(state.count * 2),
+            CounterStateUpdate::History(vec!["double".to_string()]),
+        ];
+        Ok(NodeOutput::Updates(updates))
     });
 
     let built_graph = {
@@ -77,16 +85,22 @@ async fn test_basic_counter_flow() {
 
 #[tokio::test]
 async fn test_conditional_routing() {
-    let even_node = FunctionNode::new("odd", |_ctx, mut state: CounterState| async move {
-        state.count *= 2;
-        state.record_operation("odd");
-        Ok(state)
+    let even_node = FunctionNode::new("odd", |_ctx, state: CounterState| async move {
+        let count_update = state.count * 2;
+        let updates = vec![
+            CounterStateUpdate::Count(count_update),
+            CounterStateUpdate::History(vec!["odd".to_string()]),
+        ];
+        Ok(NodeOutput::Updates(updates))
     });
 
     let odd_node = FunctionNode::new("even", |_ctx, mut state: CounterState| async move {
-        state.count = state.count * 2 + 1;
-        state.record_operation("even");
-        Ok(state)
+        let count_update = state.count * 2 + 1;
+        let updates = vec![
+            CounterStateUpdate::Count(count_update),
+            CounterStateUpdate::History(vec!["even".to_string()]),
+        ];
+        Ok(NodeOutput::Updates(updates))
     });
 
     let built_graph = {
@@ -122,23 +136,28 @@ async fn test_conditional_routing() {
 }
 
 // Test message-based state using async-openai types
-#[derive(Debug, Clone)]
+#[derive(State, Debug, Clone)]
 struct ChatState {
+    #[update(append)]
     messages: Vec<ChatCompletionRequestMessage>,
 }
 
 impl ChatState {
-    fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
+    fn new(messages: Option<Vec<ChatCompletionRequestMessage>>) -> Self {
+        match messages {
+            Some(msgs) => return Self { messages: msgs },
+            None => {
+                return Self {
+                    messages: Vec::new(),
+                }
+            }
+        };
     }
 
     fn add_user_message(&mut self, content: &str) -> GraphResult<()> {
         let message = ChatCompletionRequestUserMessageArgs::default()
             .content(content)
-            .build()
-            .map_err(|e| e)?;
+            .build()?;
         self.messages
             .push(ChatCompletionRequestMessage::User(message));
         Ok(())
@@ -148,8 +167,7 @@ impl ChatState {
         let content = ChatCompletionRequestAssistantMessageContent::Text(content.to_string());
         let message = ChatCompletionRequestAssistantMessageArgs::default()
             .content(content)
-            .build()
-            .map_err(|e| e)?;
+            .build()?;
         self.messages
             .push(ChatCompletionRequestMessage::Assistant(message));
         Ok(())
@@ -158,25 +176,25 @@ impl ChatState {
 
 #[tokio::test]
 async fn test_chat_flow() {
-    let process_node = FunctionNode::new("process", |_ctx, mut state: ChatState| async move {
+    let process_node = FunctionNode::new("process", |_ctx, state: ChatState| async move {
+        let mut new_state = ChatState::new(Some(state.messages.clone()));
         if let Some(last_msg) = state.messages.last() {
             match last_msg {
                 ChatCompletionRequestMessage::User(msg) => {
                     let content = match &msg.content {
                         ChatCompletionRequestUserMessageContent::Text(text) => text.clone(),
                         ChatCompletionRequestUserMessageContent::Array(_) => {
-                            return Err(GraphError::ExecutionError(
-                                "Array content not supported".into(),
-                            ));
+                            return Err(NodeError::Execution("Array content not supported".into()));
                         }
                     };
-                    let response = format!("Processed: {}", content);
-                    state.add_assistant_message(&response)?;
+                    new_state
+                        .add_assistant_message(&format!("Processed: {}", content))
+                        .unwrap();
                 }
                 _ => {}
             }
         }
-        Ok(state)
+        Ok(NodeOutput::Full(new_state))
     });
 
     let built_graph = {
@@ -189,9 +207,8 @@ async fn test_chat_flow() {
     };
 
     let ctx = Context::new("test");
-    let mut initial_state = ChatState::new();
+    let mut initial_state = ChatState::new(None);
     initial_state.add_user_message("Test message").unwrap();
-
     let final_state = built_graph.run(&ctx, initial_state).await.unwrap();
 
     assert_eq!(final_state.messages.len(), 2);
@@ -215,14 +232,14 @@ struct FlakyNode {
 
 #[async_trait]
 impl Node<CounterState> for FlakyNode {
-    async fn process(&self, _ctx: &Context, state: CounterState) -> GraphResult<CounterState> {
+    async fn process(&self, _ctx: &Context, state: CounterState) -> NodeResult<CounterState> {
         let mut attempts = self.attempts.lock().await;
         *attempts += 1;
 
         if *attempts <= self.max_failures {
-            Err(GraphError::ExecutionError("Temporary failure".into()))
+            Err(NodeError::Execution("Temporary failure".into()))
         } else {
-            Ok(state)
+            Ok(NodeOutput::Updates(vec![]))
         }
     }
 
@@ -261,9 +278,10 @@ fn create_test_node(
     name: &str,
     operation: impl Fn(CounterState) -> CounterState + Send + Sync + Clone + 'static,
 ) -> impl Node<CounterState> {
-    FunctionNode::new(name, move |_ctx, state| {
+    FunctionNode::new(name, move |_ctx, state: CounterState| {
         let op = operation.clone();
-        async move { Ok(op(state)) }
+        let state = state.clone();
+        Box::pin(async move { Ok(NodeOutput::Full(op(state))) })
     })
 }
 
