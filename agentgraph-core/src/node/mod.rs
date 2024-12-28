@@ -2,7 +2,7 @@ mod config;
 mod context;
 mod core;
 mod function;
-mod tool;
+mod tests;
 
 pub use config::NodeConfig;
 pub use context::Context;

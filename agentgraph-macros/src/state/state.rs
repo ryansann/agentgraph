@@ -56,7 +56,7 @@ pub fn derive_state_impl(input: TokenStream) -> TokenStream {
             #(#update_variants),*
         }
 
-        impl ::agentgraph_core::UpdateableState for #name {
+        impl ::agentgraph_core::GraphState for #name {
             type Update = #update_name;
 
             fn apply(&mut self, update: Self::Update) {

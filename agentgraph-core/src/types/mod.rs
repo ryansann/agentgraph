@@ -3,6 +3,6 @@ mod result;
 mod state;
 mod tests;
 
-pub use error::GraphError;
-pub use result::GraphResult;
-pub use state::{GraphState, UpdateableState};
+pub use error::{GraphError, NodeError, ToolError};
+pub use result::{GraphResult, NodeOutput, NodeResult};
+pub use state::GraphState;

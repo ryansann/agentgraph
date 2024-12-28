@@ -1,37 +1,12 @@
+use super::types::ToolError;
 use async_trait::async_trait;
 use schemars as sm; // rename for convenience
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use sm::JsonSchema as SchemarsJsonSchema;
-use std::error::Error;
 
 // Re-export key types and traits
 pub use async_openai::types::{ChatCompletionTool, ChatCompletionToolType, FunctionObject};
-
-/// Error type for tool operations
-#[derive(Debug, Serialize)]
-pub enum ToolError {
-    Schema(String),
-    Execution(String),
-    Serialization(String),
-}
-
-impl std::fmt::Display for ToolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Schema(msg) => write!(f, "Schema error: {}", msg),
-            Self::Execution(err) => write!(f, "Execution error: {}", err),
-            Self::Serialization(msg) => write!(f, "Serialization error: {}", msg),
-        }
-    }
-}
-
-impl Error for ToolError {}
-
-/// Helper function for implementations
-pub(crate) fn to_tool_error<E: Error + Send + Sync + 'static>(err: E) -> ToolError {
-    ToolError::Execution(err.to_string())
-}
 
 /// Our existing trait
 pub trait JsonSchema {

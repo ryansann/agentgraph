@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 /// Context for node execution
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -6,7 +8,7 @@ pub struct Context {
     /// Unique identifier for tracing
     pub trace_id: String,
     /// Additional metadata
-    pub metadata: std::collections::HashMap<String, String>,
+    pub metadata: HashMap<String, String>,
 }
 
 impl Context {
@@ -14,7 +16,7 @@ impl Context {
         Self {
             parent_trace_id: None,
             trace_id: trace_id.into(),
-            metadata: std::collections::HashMap::new(),
+            metadata: HashMap::new(),
         }
     }
 

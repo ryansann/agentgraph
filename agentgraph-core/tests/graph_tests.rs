@@ -138,7 +138,7 @@ impl ChatState {
         let message = ChatCompletionRequestUserMessageArgs::default()
             .content(content)
             .build()
-            .map_err(|e| GraphError::Other(e.into()))?;
+            .map_err(|e| e)?;
         self.messages
             .push(ChatCompletionRequestMessage::User(message));
         Ok(())
@@ -149,7 +149,7 @@ impl ChatState {
         let message = ChatCompletionRequestAssistantMessageArgs::default()
             .content(content)
             .build()
-            .map_err(|e| GraphError::Other(e.into()))?;
+            .map_err(|e| e)?;
         self.messages
             .push(ChatCompletionRequestMessage::Assistant(message));
         Ok(())

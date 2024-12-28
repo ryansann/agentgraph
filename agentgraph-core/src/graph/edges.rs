@@ -1,18 +1,15 @@
-use crate::types::{GraphError, GraphResult};
-use std::any::Any;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 /// Represents a condition for edge transitions
-pub type Condition<State> = Arc<dyn Fn(&State) -> String + Send + Sync>;
+pub type Condition<S> = Arc<dyn Fn(&S) -> String + Send + Sync>;
 
 /// Edge definition for graph transitions
 #[derive(Clone)]
-pub enum Edge<State> {
+pub enum Edge<S> {
     /// Direct edge to next node
     Direct(String),
     /// Conditional edge based on state
-    Conditional(Condition<State>),
+    Conditional(Condition<S>),
 }
 
 // Manual Debug implementation

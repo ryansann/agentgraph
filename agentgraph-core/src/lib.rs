@@ -17,8 +17,10 @@ pub mod prelude {
     };
     pub use crate::graph::{Graph, END, START};
     pub use crate::node::{Context, FunctionNode, Node};
-    pub use crate::tool::{JsonSchema, ToolError, ToolFunction};
-    pub use crate::types::{GraphError, GraphResult, GraphState, UpdateableState};
+    pub use crate::tool::{JsonSchema, ToolFunction};
+    pub use crate::types::{
+        GraphError, GraphResult, GraphState, NodeError, NodeOutput, NodeResult, ToolError,
+    };
 }
 
 // Re-export main types

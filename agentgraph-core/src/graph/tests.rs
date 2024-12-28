@@ -1,15 +1,28 @@
 #[cfg(test)]
 mod tests {
-    use super::super::*;
-    use crate::node::*;
+    use agentgraph_core::*;
+    use agentgraph_macros::State;
     use std::sync::Arc;
+
+    #[derive(State, Debug, Clone, PartialEq)]
+    struct CounterState {
+        #[update(replace)]
+        count: i32,
+    }
 
     #[tokio::test]
     async fn test_basic_graph() {
-        // Create nodes
-        let node1 = FunctionNode::new("node1", |_ctx, state: i32| async move { Ok(state + 1) });
-        let node2 = FunctionNode::new("node2", |_ctx, state: i32| async move { Ok(state * 2) });
+        let node1 = FunctionNode::new("node1", |_ctx, state: CounterState| async move {
+            Ok(NodeOutput::Updates(vec![CounterStateUpdate::Count(
+                state.count + 1,
+            )]))
+        });
 
+        let node2 = FunctionNode::new("node2", |_ctx, state: CounterState| async move {
+            Ok(NodeOutput::Full(CounterState {
+                count: state.count * 2,
+            }))
+        });
         // Build graph
         let built_graph = {
             let mut graph = Graph::new("g");
@@ -24,28 +37,39 @@ mod tests {
 
         // Run graph
         let ctx = Context::new("test");
-        let result = built_graph.run(&ctx, 1).await.unwrap();
+        let result = built_graph
+            .run(&ctx, CounterState { count: 1 })
+            .await
+            .unwrap();
 
         // 1 + 1 = 2, 2 * 2 = 4
-        assert_eq!(result, 4);
+        assert_eq!(result.count, 4);
     }
 
     #[tokio::test]
     async fn test_conditional_graph() {
-        // Create nodes
-        let node1 = FunctionNode::new("node1", |_ctx, state: i32| async move { Ok(state + 1) });
-        let node2 = FunctionNode::new("node2", |_ctx, state: i32| async move { Ok(state * 2) });
+        let node1 = FunctionNode::new("node1", |_ctx, state: CounterState| async move {
+            Ok(NodeOutput::Updates(vec![CounterStateUpdate::Count(
+                state.count + 1,
+            )]))
+        });
+
+        let node2 = FunctionNode::new("node2", |_ctx, state: CounterState| async move {
+            Ok(NodeOutput::Full(CounterState {
+                count: state.count * 2,
+            }))
+        });
 
         // Build graph with condition
         let built_graph = {
             let mut graph = Graph::new("g");
             graph
-                .add_node(node1)
-                .add_node(node2)
+                .add_node(create_add_1_node())
+                .add_node(create_multiply_2_node())
                 .add_edge(START, "node1")
                 .add_edge("node2", END)
-                .add_conditional_edge("node1", |state: &i32| {
-                    if *state < 5 {
+                .add_conditional_edge("node1", |state: &CounterState| {
+                    if state.count < 5 {
                         "node2".into()
                     } else {
                         END.into()
@@ -56,19 +80,19 @@ mod tests {
 
         // Test when condition routes to node2
         let ctx = Context::new("test1");
-        let result = built_graph.run(&ctx, 1).await.unwrap();
-        assert_eq!(result, 4);
+        let result = built_graph
+            .run(&ctx, CounterState { count: 1 })
+            .await
+            .unwrap();
+        assert_eq!(result.count, 4);
 
         // Test when condition routes to END
         let ctx = Context::new("test2");
-        let result = built_graph.run(&ctx, 5).await.unwrap();
-        assert_eq!(result, 6);
-    }
-
-    // Test state implementation
-    #[derive(Debug, Clone)]
-    struct CounterState {
-        count: i32,
+        let result = built_graph
+            .run(&ctx, CounterState { count: 5 })
+            .await
+            .unwrap();
+        assert_eq!(result.count, 6);
     }
 
     // Test edge creation and debug formatting

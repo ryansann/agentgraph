@@ -1,15 +1,47 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use agentgraph_core::*;
+    use agentgraph_macros::State;
+
+    #[derive(State, Debug, Clone, PartialEq)]
+    struct TestState {
+        #[update(replace)]
+        name: String,
+    }
 
     #[tokio::test]
     async fn test_function_node() {
-        let node = FunctionNode::new("test", |_ctx, state: i32| async move { Ok(state + 1) });
+        let node = FunctionNode::new("test", |_ctx, state: TestState| async move {
+            Ok(NodeOutput::Full(TestState {
+                name: "Ryan".to_string(),
+            }))
+        });
 
         let ctx = Context::new("test");
-        let result = node.process(&ctx, 1).await.unwrap();
+        let result = node
+            .process(
+                &ctx,
+                &TestState {
+                    name: "test".to_string(),
+                },
+            )
+            .await
+            .unwrap();
 
-        assert_eq!(result, 2);
+        match result {
+            NodeOutput::Full(state) => {
+                assert_eq!(
+                    state,
+                    TestState {
+                        name: "Ryan".to_string()
+                    }
+                );
+            }
+            NodeOutput::Updates(updates) => {
+                panic!("Expected a full state, but got updates: {:?}", updates);
+            }
+        }
+
         assert_eq!(node.name(), "test");
     }
 }

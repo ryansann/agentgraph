@@ -3,8 +3,7 @@ use agentgraph_macros::tools;
 use serde::{Deserialize, Serialize};
 
 /// Simple data for add-params
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddParams {
+ pub struct AddParams {
     x: i32,
     y: i32,
 }

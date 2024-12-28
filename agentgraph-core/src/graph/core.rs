@@ -20,9 +20,9 @@ pub struct Graph<State, BuildState = NotBuilt> {
     _build_state: std::marker::PhantomData<BuildState>,
 }
 
-impl<State> Graph<State, NotBuilt>
+impl<S> Graph<S, NotBuilt>
 where
-    State: Send + Sync + 'static,
+    S: Send + Sync + 'static + Clone + Debug + GraphState,
 {
     /// Create a new graph
     pub fn new(name: impl Into<String>) -> Self {
@@ -38,7 +38,7 @@ where
     /// Add a node to the graph
     pub fn add_node<N>(&mut self, node: N) -> &mut Self
     where
-        N: Node<State> + 'static,
+        N: Node<S> + 'static,
     {
         self.nodes.insert(node.name().to_string(), Arc::new(node));
         self
@@ -53,7 +53,7 @@ where
     /// Add a conditional edge from a node
     pub fn add_conditional_edge<F>(&mut self, from: impl Into<String>, condition: F) -> &mut Self
     where
-        F: Fn(&State) -> String + Send + Sync + 'static,
+        F: Fn(&S) -> String + Send + Sync + 'static,
     {
         self.edges
             .insert(from.into(), Edge::Conditional(Arc::new(condition)));
@@ -67,7 +67,7 @@ where
     }
 
     /// Build the graph, making it ready for execution
-    pub fn build(self) -> Graph<State, Built> {
+    pub fn build(self) -> Graph<S, Built> {
         // Validate graph structure here
         // For now, we just transform the state
         Graph {
@@ -80,12 +80,12 @@ where
     }
 }
 
-impl<State> Graph<State, Built>
+impl<S> Graph<S, Built>
 where
-    State: Clone + Send + Sync + 'static,
+    S: Clone + Send + Sync + 'static + GraphState + Debug,
 {
     /// Run the graph with an initial state
-    pub async fn run(&self, ctx: &Context, initial_state: State) -> GraphResult<State> {
+    pub async fn run(&self, ctx: &Context, initial_state: S) -> GraphResult<S> {
         let mut current_state = initial_state;
         let mut current_node = START.to_string();
 
@@ -127,26 +127,35 @@ where
 
             // Execute node with retry logic
             let mut attempts = 0;
-            let result = loop {
+            let updates = loop {
                 attempts += 1;
+                // Node::process returns NodeResult<S::Update> = Result<Vec<S::Update>, NodeError>
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(config.timeout),
-                    node.process(ctx, current_state.clone()),
+                    node.process(ctx, current_state),
                 )
                 .await
                 {
-                    Ok(Ok(new_state)) => break Ok(new_state),
-                    Ok(Err(_e)) if attempts < config.max_retries => {
-                        current_state = current_state;
+                    // (Ok(Ok(updates))) => success from Node
+                    Ok(Ok(updates)) => break Ok(updates),
+
+                    // (Ok(Err(e))) => Node returned an error
+                    Ok(Err(e)) if attempts < config.max_retries => {
+                        // optionally do something like logging the error
+                        // we don't modify `current_state` yet, so just retry
                         continue;
                     }
-                    Ok(Err(e)) => break Err(e),
+                    Ok(Err(e)) => {
+                        break Err(e); // bubble up NodeError
+                    }
+
+                    // (Err(_)) => timed out waiting for node
                     Err(_) if attempts < config.max_retries => {
-                        current_state = current_state;
+                        // optionally log the timeout
                         continue;
                     }
                     Err(_) => {
-                        break Err(GraphError::ExecutionError(format!(
+                        break Err(NodeError::Execution(format!(
                             "Node {} timed out after {} attempts",
                             next_node, attempts
                         )))
@@ -154,7 +163,17 @@ where
                 }
             }?;
 
-            current_state = result;
+            // Now apply each update to our state
+            match updates {
+                NodeOutput::Full(new_state) => {
+                    current_state = new_state;
+                }
+                NodeOutput::Updates(updates) => {
+                    current_state.apply_many(updates);
+                }
+            }
+
+            // Move on
             current_node = next_node;
         }
 
@@ -163,17 +182,19 @@ where
 }
 
 #[async_trait]
-impl<State> Node<State> for Graph<State, Built>
+impl<S> Node<S> for Graph<S, Built>
 where
-    State: Clone + Send + Sync + Debug + 'static,
+    S: Clone + Send + Sync + Debug + 'static + GraphState,
 {
-    async fn process(&self, ctx: &Context, state: State) -> GraphResult<State> {
-        // Simply delegate to the run method
-        self.run(ctx, state).await
+    async fn process(&self, ctx: &Context, state: S) -> NodeResult<S> {
+        let new_state = self
+            .run(ctx, state.clone())
+            .await
+            .map_err(|e| NodeError::SubgraphExecution(e.to_string()))?;
+        Ok(NodeOutput::Full(new_state))
     }
 
     fn name(&self) -> &str {
-        // Each graph should have a name for debugging and tracing
         &self.graph_name
     }
 }

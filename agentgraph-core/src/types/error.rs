@@ -1,26 +1,71 @@
+use async_openai::error::OpenAIError;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Core error types for the graphite library
-#[derive(Error, Debug)]
+/// Error type for tool operations
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
+pub enum ToolError {
+    #[error("Schema error: {0}")]
+    Schema(String),
+
+    #[error("Execution error: {0}")]
+    Execution(String),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+}
+
+/// Error type for node operations
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
+pub enum NodeError {
+    #[error("Node execution error: {0}")]
+    Execution(String),
+
+    #[error(transparent)]
+    Tool(#[from] ToolError),
+
+    #[error("Subgraph execution error: {0}")]
+    SubgraphExecution(String),
+}
+
+/// Error type for overall graph operations
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
 pub enum GraphError {
-    #[error("node not found: {0}")]
+    #[error("Node not found: {0}")]
     NodeNotFound(String),
 
-    #[error("invalid transition: {0}")]
+    #[error("Invalid transition: {0}")]
     InvalidTransition(String),
 
-    #[error("graph execution error: {0}")]
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+
+    #[error("Graph execution error: {0}")]
     ExecutionError(String),
 
-    #[error("tool execution error: {0}")]
-    ToolError(String),
+    // NodeError can bubble up automatically
+    #[error(transparent)]
+    Node(#[from] NodeError),
 
     #[error("LLM error: {0}")]
     LLMError(String),
 
-    #[error("invalid state: {0}")]
-    InvalidState(String),
+    // Catch-all for other errors like anyhow
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+impl From<anyhow::Error> for GraphError {
+    fn from(err: anyhow::Error) -> Self {
+        GraphError::Other(err.to_string())
+    }
+}
+
+impl From<OpenAIError> for GraphError {
+    fn from(err: OpenAIError) -> Self {
+        GraphError::LLMError(err.to_string())
+    }
 }
