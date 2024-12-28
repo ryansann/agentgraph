@@ -1,12 +1,8 @@
-use agentgraph_macros::tools; // <-- the macro
-use async_trait::async_trait;
-use agentgraph::{
-    ToolError,
-    ToolFunction,
-};
-use serde::{Serialize, Deserialize};
-use serde_json::to_string;
+use agentgraph_core::{ToolError, ToolFunction};
+use agentgraph_macros::tools;
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::to_string;
 
 // Our data types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -42,22 +38,26 @@ impl MathTool {
     // uses `.await?`.
     // If we return a plain type, it uses `.await`.
     async fn add(&self, params: AddParams) -> Result<AddResponse, ToolError> {
-        Ok(AddResponse { sum: params.x + params.y })
+        Ok(AddResponse {
+            sum: params.x + params.y,
+        })
     }
 
     async fn subtract(&self, params: SubParams) -> Result<SubResponse, ToolError> {
         // Return a plain type, so the macro uses `.await` (no `?`)
-        Ok(SubResponse { diff: params.a - params.b })
+        Ok(SubResponse {
+            diff: params.a - params.b,
+        })
     }
 
-    async fn helper(&self, val: i32) -> i32 {
+    async fn _helper(&self, val: i32) -> i32 {
         val * 10
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Because the macro expansions create `MathToolAdd` and `MathToolSubtract`, 
+    // Because the macro expansions create `MathToolAdd` and `MathToolSubtract`,
     // we can do:
     let add_tool = MathToolAdd(MathTool);
     let add_tool_schema = <MathToolAdd as ToolFunction>::get_schema();
@@ -67,13 +67,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Now we can call the macro-generated trait:
     let add_res = ToolFunction::execute(&add_tool, AddParams { x: 3, y: 4 }).await?;
     println!("Add name: {}", <MathToolAdd as ToolFunction>::name());
-    println!("Add description: {}", <MathToolAdd as ToolFunction>::description());
+    println!(
+        "Add description: {}",
+        <MathToolAdd as ToolFunction>::description()
+    );
     println!("Add result: {}", add_res.sum);
     println!("Add schema: {}", to_string(&add_tool_schema)?);
 
-    let sub_res = ToolFunction::execute(&sub_tool, SubParams { a: 7, b: 2}).await?;
-    println!("Subtract name: {}", <MathToolSubtract as ToolFunction>::name());
-    println!("Subtract description: {}", <MathToolSubtract as ToolFunction>::description());
+    let sub_res = ToolFunction::execute(&sub_tool, SubParams { a: 7, b: 2 }).await?;
+    println!(
+        "Subtract name: {}",
+        <MathToolSubtract as ToolFunction>::name()
+    );
+    println!(
+        "Subtract description: {}",
+        <MathToolSubtract as ToolFunction>::description()
+    );
     println!("Subtract result: {}", sub_res.diff);
     println!("Subtract schema: {}", to_string(&sub_tool_schema)?);
 

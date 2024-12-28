@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::fmt::{Debug, Formatter, Result};
 use std::sync::Arc;
 
 /// Represents a condition for edge transitions
@@ -13,8 +15,8 @@ pub enum Edge<S> {
 }
 
 // Manual Debug implementation
-impl<State> std::fmt::Debug for Edge<State> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<S> Debug for Edge<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Edge::Direct(target) => f.debug_tuple("Direct").field(target).finish(),
             Edge::Conditional(_) => f

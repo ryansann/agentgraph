@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 agentgraph-macros = { path = "../../agentgraph-macros" }
-agentgraph = { path = "../.." }
+agentgraph-core = { path = "../../agentgraph-core" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1.0", features = ["derive"] }

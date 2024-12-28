@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-agentgraph = { path = "../.." }
+agentgraph-core = { path = "../../agentgraph-core" }
 agentgraph-macros = { path = "../../agentgraph-macros" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
