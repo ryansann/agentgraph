@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::SystemTime;
@@ -28,17 +28,17 @@ impl std::error::Error for TracingError {}
 pub trait TracingProvider: Send + Sync {
     async fn start_trace(
         &self,
-        trace_id: Uuid,
+        trace_id: &str,
         name: &str,
         trace_type: &str,
         inputs: &Value,
-        parent_trace_id: Option<Uuid>,
+        parent_trace_id: Option<String>,
         start_time: Option<SystemTime>,
     ) -> Result<(), TracingError>;
 
     async fn end_trace(
         &self,
-        trace_id: Uuid,
+        trace_id: &str,
         outputs: &Value,
         end_time: Option<SystemTime>,
     ) -> Result<(), TracingError>;
@@ -89,11 +89,11 @@ struct ApiError {
 impl TracingProvider for LangSmithTracer {
     async fn start_trace(
         &self,
-        trace_id: Uuid,
+        trace_id: &str,
         name: &str,
         trace_type: &str,
         inputs: &Value,
-        parent_trace_id: Option<Uuid>,
+        parent_trace_id: Option<String>,
         start_time: Option<SystemTime>,
     ) -> Result<(), TracingError> {
         // If start_time isn't provided, use current time
@@ -140,7 +140,7 @@ impl TracingProvider for LangSmithTracer {
 
     async fn end_trace(
         &self,
-        trace_id: Uuid,
+        trace_id: &str,
         outputs: &Value,
         end_time: Option<SystemTime>,
     ) -> Result<(), TracingError> {

@@ -11,6 +11,12 @@ pub struct Context {
     pub metadata: HashMap<String, String>,
 }
 
+impl Default for Context {
+    fn default() -> Self {
+        Self::new(uuid::Uuid::new_v4().to_string())
+    }
+}
+
 impl Context {
     pub fn new(trace_id: impl Into<String>) -> Self {
         Self {

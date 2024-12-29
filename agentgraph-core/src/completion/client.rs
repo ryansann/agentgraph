@@ -10,7 +10,7 @@ use async_openai::{
 };
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -40,8 +40,17 @@ impl Default for ChatCompletionRequestOptions {
 
 #[derive(Debug, Clone, Default)]
 pub struct ChatCompletionCallOptions {
-    pub trace_id: Option<Uuid>,
-    pub parent_trace_id: Option<Uuid>,
+    pub trace_id: Option<String>,
+    pub parent_trace_id: Option<String>,
+}
+
+impl ChatCompletionCallOptions {
+    pub fn new(trace_id: Option<String>, parent_trace_id: Option<String>) -> Self {
+        Self {
+            trace_id,
+            parent_trace_id,
+        }
+    }
 }
 
 #[async_trait]
@@ -169,9 +178,9 @@ impl ChatClient for ChatClientImpl {
     ) -> Result<CreateChatCompletionResponse, Box<dyn std::error::Error + Send + Sync>> {
         let trace_id = options
             .as_ref()
-            .and_then(|o| o.trace_id)
-            .unwrap_or_else(Uuid::new_v4);
-        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id);
+            .and_then(|o| o.trace_id.clone())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id.clone());
 
         // If we want to capture the entire request:
         let inputs = serde_json::to_value(&request)
@@ -181,7 +190,7 @@ impl ChatClient for ChatClientImpl {
         if let Some(tracer) = &self.tracer {
             tracer
                 .start_trace(
-                    trace_id,
+                    &trace_id,
                     "chat_completion",
                     "llm",
                     &inputs,
@@ -200,7 +209,7 @@ impl ChatClient for ChatClientImpl {
                 .unwrap_or_else(|_| json!({ "error": "Failed to serialize response" }));
 
             tracer
-                .end_trace(trace_id, &outputs, Some(SystemTime::now()))
+                .end_trace(&trace_id, &outputs, Some(SystemTime::now()))
                 .await?;
         }
 
@@ -226,9 +235,9 @@ impl ChatClient for ChatClientImpl {
     > {
         let trace_id = options
             .as_ref()
-            .and_then(|o| o.trace_id)
-            .unwrap_or_else(Uuid::new_v4);
-        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id);
+            .and_then(|o| o.trace_id.clone())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let parent_trace_id = options.as_ref().and_then(|o| o.parent_trace_id.clone());
 
         // Serialize the entire request for the trace
         let inputs = serde_json::to_value(&request)
@@ -238,7 +247,7 @@ impl ChatClient for ChatClientImpl {
         if let Some(tracer) = &self.tracer {
             tracer
                 .start_trace(
-                    trace_id,
+                    &trace_id,
                     "chat_completion_stream",
                     "chain",
                     &inputs,
@@ -275,7 +284,7 @@ impl ChatClient for ChatClientImpl {
                 let outputs = json!({ "streamed_content": full_response });
                 if let Err(e) = tracer
                     .end_trace(
-                        trace_id,
+                        &trace_id,
                         &outputs,
                         Some(SystemTime::now()),
                     )
