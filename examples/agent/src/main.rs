@@ -54,7 +54,10 @@ impl SearchTools {
 
 #[derive(State, Debug, Clone, Serialize, Deserialize)]
 pub struct SearchAgentState {
+    #[update(append)]
     messages: Vec<ChatCompletionRequestMessage>,
+
+    #[update(append)]
     errors: Vec<String>,
 }
 
@@ -186,16 +189,18 @@ pub struct SearchAgent {
 }
 
 impl SearchAgent {
-    pub fn new(openai_api_key: String) -> Self {
+    pub fn new(openai_api_key: String, langsmith_api_key: String) -> Self {
         let search_tool = SearchToolsWebSearch(SearchTools);
         let search_tool_schema = <SearchToolsWebSearch as ToolFunction>::get_schema();
-
         println!(
             "Search tool schema: {}",
             serde_json::to_string_pretty(&search_tool_schema).unwrap()
         );
         Self {
-            client: Arc::new(ChatClientImpl::new(openai_api_key)),
+            client: Arc::new(
+                ChatClientImpl::new(openai_api_key)
+                    .with_tracer(Arc::new(LangSmithTracer::new(langsmith_api_key))),
+            ),
             search_tool: Arc::new(search_tool),
             options: ChatCompletionRequestOptions {
                 model: "gpt-4o-mini".to_string(),
@@ -310,6 +315,7 @@ impl SearchAgent {
                 END.to_string()
             }
         });
+        graph.add_edge("tools", "agent");
 
         let built_graph = graph.build();
         built_graph
@@ -319,12 +325,14 @@ impl SearchAgent {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
+    let langsmith_api_key =
+        std::env::var("LANGSMITH_API_KEY").expect("LANGSMITH_API_KEY must be set");
 
     let context = Context::default();
-    let agent = SearchAgent::new(openai_api_key);
+    let agent = SearchAgent::new(openai_api_key, langsmith_api_key);
     let initial_state = SearchAgentState::new(
-        Some("You are a search agent that uses tools to answer user queries".to_string()),
-        Some("Tell me about lifetimes in Rust".to_string()),
+        Some("You are a search agent that uses search tools to answer user queries.".to_string()),
+        Some("Tell me about Rust's latest release".to_string()),
     );
     let result = agent.build_graph().run(&context, initial_state).await?;
     result.get_latest_messages(2).iter().for_each(|msg| {
