@@ -35,4 +35,12 @@ impl Context {
         self.metadata.insert(key.into(), value.into());
         self
     }
+
+    pub fn next_node_context(&self) -> Self {
+        Self {
+            parent_trace_id: Some(self.trace_id.clone()),
+            trace_id: uuid::Uuid::new_v4().to_string(),
+            metadata: self.metadata.clone(),
+        }
+    }
 }

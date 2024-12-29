@@ -95,13 +95,6 @@ impl SearchAgentState {
     pub fn get_latest_messages(&self, count: usize) -> Vec<ChatCompletionRequestMessage> {
         let mut result = Vec::new();
 
-        // Include the first message if it's a system message
-        if let Some(first) = self.messages.first() {
-            if matches!(first, ChatCompletionRequestMessage::System(_)) {
-                result.push(first.clone());
-            }
-        }
-
         // Add up to `count` most recent non-system messages
         result.extend(
             self.messages
@@ -256,12 +249,14 @@ impl SearchAgent {
 
     async fn execute_tools(
         self: &Self,
-        ctx: &Context,
+        _ctx: &Context,
         state: SearchAgentState,
     ) -> NodeResult<SearchAgentState> {
         let mut new_messages = vec![];
         let messages = state.get_latest_messages(1);
         let last_message = messages.first().unwrap();
+        println!("State: {:?}", state);
+        println!("Last message: {:?}", last_message);
         match last_message {
             ChatCompletionRequestMessage::Assistant(asst_msg) => {
                 let search_tool_name = <SearchToolsWebSearch as ToolFunction>::name();

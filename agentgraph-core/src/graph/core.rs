@@ -129,13 +129,17 @@ where
             let config = self.configs.get(&next_node).cloned().unwrap_or_default();
 
             // Execute node with retry logic
+            let mut node_ctx = ctx.clone();
             let mut attempts = 0;
             let updates = loop {
                 attempts += 1;
+                if attempts > 1 {
+                    node_ctx = node_ctx.next_node_context();
+                }
                 // Node::process returns NodeResult<S::Update> = Result<Vec<S::Update>, NodeError>
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(config.timeout),
-                    node.process(ctx, current_state.clone()),
+                    node.process(&node_ctx, current_state.clone()),
                 )
                 .await
                 {
