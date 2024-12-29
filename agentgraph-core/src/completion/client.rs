@@ -59,13 +59,13 @@ pub trait ChatClient: Send + Sync {
     fn create_chat_completion_request(
         &self,
         messages: Vec<ChatCompletionRequestMessage>,
-        options: ChatCompletionRequestOptions,
+        options: &ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>>;
 
     fn create_chat_completion_stream_request(
         &self,
         messages: Vec<ChatCompletionRequestMessage>,
-        options: ChatCompletionRequestOptions,
+        options: &ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>>;
 
     // Completion methods
@@ -120,22 +120,22 @@ impl ChatClientImpl {
     fn create_base_request(
         &self,
         messages: Vec<ChatCompletionRequestMessage>,
-        options: ChatCompletionRequestOptions,
+        options: &ChatCompletionRequestOptions,
     ) -> CreateChatCompletionRequestArgs {
         let mut builder = CreateChatCompletionRequestArgs::default();
-        let mut builder = builder.model(options.model);
+        let mut builder = builder.model(options.model.clone());
         let mut builder = builder.messages(messages);
         let mut builder = if let Some(temp) = options.temperature {
             builder.temperature(temp)
         } else {
             builder
         };
-        let mut builder = if let Some(tools) = options.tools {
+        let mut builder = if let Some(tools) = options.tools.clone() {
             builder.tools(tools)
         } else {
             builder
         };
-        let builder = if let Some(tool_choice) = options.tool_choice {
+        let builder = if let Some(tool_choice) = options.tool_choice.clone() {
             builder.tool_choice(tool_choice)
         } else {
             builder
@@ -150,7 +150,7 @@ impl ChatClient for ChatClientImpl {
     fn create_chat_completion_request(
         &self,
         messages: Vec<ChatCompletionRequestMessage>,
-        options: ChatCompletionRequestOptions,
+        options: &ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self
             .create_base_request(messages, options)
@@ -162,7 +162,7 @@ impl ChatClient for ChatClientImpl {
     fn create_chat_completion_stream_request(
         &self,
         messages: Vec<ChatCompletionRequestMessage>,
-        options: ChatCompletionRequestOptions,
+        options: &ChatCompletionRequestOptions,
     ) -> Result<CreateChatCompletionRequest, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self
             .create_base_request(messages, options)

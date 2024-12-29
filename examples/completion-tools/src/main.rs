@@ -14,6 +14,7 @@ use std::env;
 pub struct WeatherParams {
     #[schemars(description = "Location to check the weather")]
     location: String,
+
     #[schemars(description = "Temperature unit (F or C)")]
     unit: String,
 }
@@ -30,8 +31,10 @@ pub struct WeatherResponse {
 pub struct TimeConversionParams {
     #[schemars(description = "Time to convert")]
     time: String,
+
     #[schemars(description = "Time zone to convert from")]
     from_zone: String,
+    
     #[schemars(description = "Time zone to convert to")]
     to_zone: String,
 }
@@ -131,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Create and send the request
     println!("Creating chat completion request...");
-    let request = client.create_chat_completion_request(messages, options)?;
+    let request = client.create_chat_completion_request(messages, &options)?;
 
     println!("\nSending request to OpenAI...");
     let response = client.complete(request, None).await?;

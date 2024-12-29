@@ -2,6 +2,8 @@ use agentgraph_core::prelude::*;
 use agentgraph_macros::{State, tools};
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    ChatCompletionRequestToolMessageArgs,
+    ChatCompletionRequestAssistantMessageArgs,
     ChatCompletionToolChoiceOption, ChatCompletionRequestMessage,
 };
 use schemars::JsonSchema;
@@ -198,22 +200,46 @@ impl SearchAgent {
     async fn call(self: &Self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
         let request = self
             .client
-            .create_chat_completion_request(state.messages.clone(), self.options)?;
+            .create_chat_completion_request(state.messages.clone(), &self.options).map_err(|e| NodeError::Execution(e.to_string()))?;
         let response = self
             .client
-            .complete(request, Some(ChatCompletionCallOptions::new(Some(ctx.trace_id), None)))
-            .await?;
-
-    // For example, take the first choice's message and push it into `state.messages`.
-    let new_message = ChatCompletionRequestMessage::Assistant(response.choices[0].message.clone());
-    state.messages.push(new_message);
-
-    // Now return NodeOutput::Full(updated_state)
-    Ok(NodeOutput::Full(state))
+            .complete(request, Some(ChatCompletionCallOptions::new(Some(ctx.trace_id.clone()), None)))
+            .await.map_err(|e| NodeError::Execution(e.to_string()))?;
+        let mut new_messages = vec![];
+        match response.choices.first() {
+            Some(choice) => {
+                let content = match &choice.message.content {
+                    Some(content) => content,
+                    _ => "",
+                };
+                let tool_calls = choice.message.tool_calls.clone().unwrap_or_default();
+                let assistant_message = ChatCompletionRequestAssistantMessageArgs::default().content(content).tool_calls(tool_calls).build()?.into();
+                new_messages.push(assistant_message);
+            }
+            None => {
+                return Err(NodeError::Execution("No response choices".to_string()));
+            }
+        }
+        let updates = vec![SearchAgentStateUpdate::Messages(new_messages)];
+        Ok(NodeOutput::Updates(updates))
     }
 
     async fn execute_tools(self: &Self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
-        todo!();
+        let mut new_messages =  vec![];
+        let last_message = state.get_latest_messages(1).first().unwrap();
+        match last_message {
+            Some(tool_calls) => {
+                for tool_call in tool_calls {
+                    let tool_response = self.search_tool.execute(tool_call.parameters.clone()).await?;
+                    let tool_response_message = ChatCompletionRequestToolMessageArgs::default().content(tool_response).tool_call_id(tool_call).build()?.into();
+                }
+            }
+            None => {
+                return Err(NodeError::Execution("No tool calls".to_string()));
+            }
+        }
+        let updates = vec![SearchAgentStateUpdate::Messages(new_messages)];
+        Ok(NodeOutput::Updates(updates))
     }
 
     pub fn build_graph(self: &Self) -> Graph<SearchAgentState, Built> {
