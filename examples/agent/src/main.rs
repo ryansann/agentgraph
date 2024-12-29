@@ -1,16 +1,15 @@
 use agentgraph_core::prelude::*;
-use agentgraph_macros::{State, tools};
+use agentgraph_macros::{tools, State};
 use async_openai::types::{
-    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
-    ChatCompletionRequestToolMessageArgs,
-    ChatCompletionRequestAssistantMessageArgs,
-    ChatCompletionToolChoiceOption, ChatCompletionRequestMessage,
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
+    ChatCompletionRequestToolMessageArgs, ChatCompletionToolChoiceOption,
 };
+use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use async_trait::async_trait;
+use serde_json::json;
 use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
 
 // Search tool types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -18,9 +17,6 @@ use std::fmt::{Debug, Formatter};
 pub struct SearchParams {
     #[schemars(description = "The search query to execute")]
     query: String,
-
-    #[schemars(description = "Maximum number of results to return (default: 5)")]
-    max_results: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,8 +46,7 @@ impl SearchTools {
             snippet: format!("Relevant information about: {}", params.query),
         };
 
-        let max_results = params.max_results.unwrap_or(5);
-        let results = vec![result; max_results];
+        let results = vec![result];
 
         Ok(SearchResponse { results })
     }
@@ -64,7 +59,7 @@ pub struct SearchAgentState {
 }
 
 impl SearchAgentState {
-    pub fn new(system: Option<String>, user : Option<String>) -> Self {
+    pub fn new(system: Option<String>, user: Option<String>) -> Self {
         let mut messages = vec![];
         if let Some(msg) = system {
             messages.push(ChatCompletionRequestMessage::System(msg.into()));
@@ -83,10 +78,13 @@ impl SearchAgentState {
             match msg {
                 ChatCompletionRequestMessage::Assistant(asst_msg) => {
                     // Check if the message has any tool calls
-                    asst_msg.tool_calls.as_ref().map_or(false, |calls| !calls.is_empty())
+                    asst_msg
+                        .tool_calls
+                        .as_ref()
+                        .map_or(false, |calls| !calls.is_empty())
                 }
                 // Other message types (System, User) can't have tool calls
-                _ => false
+                _ => false,
             }
         })
     }
@@ -116,7 +114,6 @@ impl SearchAgentState {
 
         result
     }
-
 }
 
 impl Default for SearchAgentState {
@@ -136,7 +133,11 @@ pub struct AgentNode {
 
 #[async_trait]
 impl Node<SearchAgentState> for AgentNode {
-    async fn process(&self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
+    async fn process(
+        &self,
+        ctx: &Context,
+        state: SearchAgentState,
+    ) -> NodeResult<SearchAgentState> {
         self.agent.call(ctx, state).await
     }
 
@@ -158,7 +159,11 @@ struct ToolsNode {
 
 #[async_trait]
 impl Node<SearchAgentState> for ToolsNode {
-    async fn process(&self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
+    async fn process(
+        &self,
+        ctx: &Context,
+        state: SearchAgentState,
+    ) -> NodeResult<SearchAgentState> {
         self.agent.execute_tools(ctx, state).await
     }
 
@@ -181,10 +186,14 @@ pub struct SearchAgent {
 }
 
 impl SearchAgent {
-
     pub fn new(openai_api_key: String) -> Self {
         let search_tool = SearchToolsWebSearch(SearchTools);
         let search_tool_schema = <SearchToolsWebSearch as ToolFunction>::get_schema();
+
+        println!(
+            "Search tool schema: {}",
+            serde_json::to_string_pretty(&search_tool_schema).unwrap()
+        );
         Self {
             client: Arc::new(ChatClientImpl::new(openai_api_key)),
             search_tool: Arc::new(search_tool),
@@ -197,14 +206,26 @@ impl SearchAgent {
         }
     }
 
-    async fn call(self: &Self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
+    async fn call(
+        self: &Self,
+        ctx: &Context,
+        state: SearchAgentState,
+    ) -> NodeResult<SearchAgentState> {
         let request = self
             .client
-            .create_chat_completion_request(state.messages.clone(), &self.options).map_err(|e| NodeError::Execution(e.to_string()))?;
+            .create_chat_completion_request(state.messages.clone(), &self.options)
+            .map_err(|e| NodeError::Execution(e.to_string()))?;
         let response = self
             .client
-            .complete(request, Some(ChatCompletionCallOptions::new(Some(ctx.trace_id.clone()), None)))
-            .await.map_err(|e| NodeError::Execution(e.to_string()))?;
+            .complete(
+                request,
+                Some(ChatCompletionCallOptions::new(
+                    Some(ctx.trace_id.clone()),
+                    None,
+                )),
+            )
+            .await
+            .map_err(|e| NodeError::Execution(e.to_string()))?;
         let mut new_messages = vec![];
         match response.choices.first() {
             Some(choice) => {
@@ -213,7 +234,11 @@ impl SearchAgent {
                     _ => "",
                 };
                 let tool_calls = choice.message.tool_calls.clone().unwrap_or_default();
-                let assistant_message = ChatCompletionRequestAssistantMessageArgs::default().content(content).tool_calls(tool_calls).build()?.into();
+                let assistant_message = ChatCompletionRequestAssistantMessageArgs::default()
+                    .content(content)
+                    .tool_calls(tool_calls)
+                    .build()?
+                    .into();
                 new_messages.push(assistant_message);
             }
             None => {
@@ -224,18 +249,40 @@ impl SearchAgent {
         Ok(NodeOutput::Updates(updates))
     }
 
-    async fn execute_tools(self: &Self, ctx: &Context, state: SearchAgentState) -> NodeResult<SearchAgentState> {
-        let mut new_messages =  vec![];
-        let last_message = state.get_latest_messages(1).first().unwrap();
+    async fn execute_tools(
+        self: &Self,
+        ctx: &Context,
+        state: SearchAgentState,
+    ) -> NodeResult<SearchAgentState> {
+        let mut new_messages = vec![];
+        let messages = state.get_latest_messages(1);
+        let last_message = messages.first().unwrap();
         match last_message {
-            Some(tool_calls) => {
+            ChatCompletionRequestMessage::Assistant(asst_msg) => {
+                let search_tool_name = <SearchToolsWebSearch as ToolFunction>::name();
+                let tool_calls = asst_msg.tool_calls.clone().unwrap_or_default();
                 for tool_call in tool_calls {
-                    let tool_response = self.search_tool.execute(tool_call.parameters.clone()).await?;
-                    let tool_response_message = ChatCompletionRequestToolMessageArgs::default().content(tool_response).tool_call_id(tool_call).build()?.into();
+                    match tool_call.function.name.as_str() {
+                        name if name == search_tool_name => {
+                            let params: SearchParams =
+                                serde_json::from_str(&tool_call.function.arguments)
+                                    .map_err(|e| NodeError::Execution(e.to_string()))?;
+                            let search_results = self.search_tool.execute(params).await?;
+                            let tool_response = ChatCompletionRequestToolMessageArgs::default()
+                                .content(json!(search_results).to_string())
+                                .tool_call_id(tool_call.id)
+                                .build()?
+                                .into();
+                            new_messages.push(tool_response);
+                        }
+                        _ => return Err(NodeError::Execution("Unknown tool call".to_string())),
+                    }
                 }
             }
-            None => {
-                return Err(NodeError::Execution("No tool calls".to_string()));
+            _ => {
+                return Err(NodeError::Execution(
+                    "No assistant message found".to_string(),
+                ));
             }
         }
         let updates = vec![SearchAgentStateUpdate::Messages(new_messages)];
@@ -267,7 +314,6 @@ impl SearchAgent {
         let built_graph = graph.build();
         built_graph
     }
-
 }
 
 #[tokio::main]
@@ -277,7 +323,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let context = Context::default();
     let agent = SearchAgent::new(openai_api_key);
     let initial_state = SearchAgentState::new(
-        Some("You are a search agent that uses tools to answer user queries".to_string()), 
+        Some("You are a search agent that uses tools to answer user queries".to_string()),
         Some("Tell me about lifetimes in Rust".to_string()),
     );
     let result = agent.build_graph().run(&context, initial_state).await?;
