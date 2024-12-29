@@ -219,7 +219,7 @@ impl SearchAgent {
                 request,
                 Some(ChatCompletionCallOptions::new(
                     Some(ctx.trace_id.clone()),
-                    None,
+                    ctx.parent_trace_id.clone(),
                 )),
             )
             .await
@@ -255,8 +255,6 @@ impl SearchAgent {
         let mut new_messages = vec![];
         let messages = state.get_latest_messages(1);
         let last_message = messages.first().unwrap();
-        println!("State: {:?}", state);
-        println!("Last message: {:?}", last_message);
         match last_message {
             ChatCompletionRequestMessage::Assistant(asst_msg) => {
                 let search_tool_name = <SearchToolsWebSearch as ToolFunction>::name();
